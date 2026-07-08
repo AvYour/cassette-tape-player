@@ -24,3 +24,7 @@ plugins {
 }
 
 include(":app")
+
+// Spotify App Remote SDK (local AAR module required by spotify_sdk plugin)
+include(":spotify-app-remote")
+project(":spotify-app-remote").projectDir = file("spotify-app-remote")

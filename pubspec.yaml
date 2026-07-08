@@ -9,11 +9,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  spotify_sdk: ^2.3.0
+  spotify_sdk: 3.0.0
   http: ^1.2.0
   flutter_secure_storage: ^9.2.2
   flutter_dotenv: ^5.1.0
   google_fonts: ^6.2.1
+
+# Vendored spotify_sdk: the published 3.0.0 still ships Flutter v1 embedding
+# (PluginRegistry.Registrar), which no longer compiles on current Flutter.
+# The local copy removes that dead v1 registration path.
+dependency_overrides:
+  spotify_sdk:
+    path: third_party/spotify_sdk
 
 dev_dependencies:
   flutter_test:

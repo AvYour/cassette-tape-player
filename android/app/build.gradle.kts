@@ -24,6 +24,10 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["appAuthRedirectScheme"] = "cassetteplayer"
+        // Required by the Spotify auth library's manifest intent-filter.
+        // Redirect URI: cassetteplayer://callback
+        manifestPlaceholders["redirectSchemeName"] = "cassetteplayer"
+        manifestPlaceholders["redirectHostName"] = "callback"
     }
 
     buildTypes {
