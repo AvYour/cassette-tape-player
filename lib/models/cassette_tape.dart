@@ -13,6 +13,7 @@ class CassetteTape {
   final String spotifyUri;
   final Color bodyColor;
   final Color stripeColor;
+  final int durationMs;
 
   const CassetteTape({
     required this.id,
@@ -24,6 +25,7 @@ class CassetteTape {
     required this.spotifyUri,
     required this.bodyColor,
     required this.stripeColor,
+    this.durationMs = 210000,
   });
 
   factory CassetteTape.fromSpotifyTrack(Map<String, dynamic> track, int index) {
@@ -42,19 +44,40 @@ class CassetteTape {
       spotifyUri: track['uri'] as String? ?? '',
       bodyColor: palette['body']!,
       stripeColor: palette['stripe']!,
+      durationMs: (track['duration_ms'] as int?) ?? 210000,
     );
   }
 
-  static List<CassetteTape> get demoTapes => const [
-        CassetteTape(
-          id: 'demo_1',
-          trackName: 'Connect to Spotify',
-          artistName: 'Tap button above',
-          albumName: 'Demo',
-          year: '2024',
-          spotifyUri: '',
-          bodyColor: Color(0xFFE6DBC4),
-          stripeColor: Color(0xFFD94532),
-        ),
-      ];
+  /// A pre-populated set of tapes so the app is fully explorable (swipe,
+  /// simulated playback, spinning reels) without a Spotify connection.
+  static List<CassetteTape> get demoTapes => List.unmodifiable(
+        _demoData.asMap().entries.map((e) {
+          final i = e.key;
+          final d = e.value;
+          final palette = kTapePalette[i % kTapePalette.length];
+          return CassetteTape(
+            id: 'demo_$i',
+            trackName: d[0],
+            artistName: d[1],
+            albumName: d[2],
+            year: d[3],
+            spotifyUri: '',
+            bodyColor: palette['body']!,
+            stripeColor: palette['stripe']!,
+            durationMs: int.parse(d[4]),
+          );
+        }),
+      );
+
+  // trackName, artist, album, year, durationMs
+  static const List<List<String>> _demoData = [
+    ['Midnight City', 'Neon Cassette', 'Analog Dreams', '1986', '241000'],
+    ['Velvet Static', 'The Reel Sessions', 'Warm Hiss', '1979', '198000'],
+    ['Ferric Oxide', 'Dolby & The Nightriders', 'Type II', '1983', '224000'],
+    ['Slow Rewind', 'Magnetic Fields Co.', 'Auto-Reverse', '1991', '267000'],
+    ['Saturday Tape', 'Cassidy Vaughn', 'Mixtape No. 4', '1988', '203000'],
+    ['Golden Hour', 'Amber Chrome', 'Sunset Deck', '1976', '189000'],
+    ['Chrome Bias', 'Highway 90', 'B-Side Stories', '1985', '215000'],
+    ['Last Play', 'The Fadeouts', 'End of Reel', '1993', '252000'],
+  ];
 }

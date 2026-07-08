@@ -26,27 +26,28 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   TapeState _tapeState = TapeState.stopped;
   late CassetteTape _tape;
+  bool _started = false;
 
   @override
   void initState() {
     super.initState();
     _tape = widget.tape;
-    if (widget.spotifyService.isConnected && _tape.spotifyUri.isNotEmpty) {
-      _startPlayback();
-    }
+    // Auto-start playback (real Spotify when connected, otherwise the demo
+    // simulation) so the tape comes alive on open.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startPlayback());
   }
 
   Future<void> _startPlayback() async {
-    await widget.spotifyService.play(_tape.spotifyUri);
+    _started = true;
+    await widget.spotifyService.playTape(_tape);
     if (mounted) setState(() => _tapeState = TapeState.playing);
   }
 
   Future<void> _handlePlay() async {
-    final svc = widget.spotifyService;
-    if (svc.playerState == null) {
+    if (!_started) {
       await _startPlayback();
     } else {
-      await svc.resume();
+      await widget.spotifyService.resume();
       if (mounted) setState(() => _tapeState = TapeState.playing);
     }
   }
