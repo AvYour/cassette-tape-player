@@ -95,12 +95,12 @@ class _KnobPainter extends CustomPainter {
     canvas.drawCircle(
       center + const Offset(2, 3),
       r,
-      Paint()..color = Colors.black.withOpacity(0.38),
+      Paint()..color = Colors.black.withValues(alpha: 0.38),
     );
 
-    final gradient = RadialGradient(
-      center: const Alignment(-0.35, -0.35),
-      colors: [const Color(0xFF404040), const Color(0xFF0F0F0F)],
+    const gradient = RadialGradient(
+      center: Alignment(-0.35, -0.35),
+      colors: [Color(0xFF404040), Color(0xFF0F0F0F)],
     );
     canvas.drawCircle(
       center,
@@ -115,7 +115,7 @@ class _KnobPainter extends CustomPainter {
     const sweepAngle = 270 * pi / 180;
 
     final tickPaint = Paint()
-      ..color = Colors.white.withOpacity(0.22)
+      ..color = Colors.white.withValues(alpha: 0.22)
       ..strokeWidth = 1.0;
     for (int i = 0; i <= 10; i++) {
       final a = startAngle + (sweepAngle * i / 10);

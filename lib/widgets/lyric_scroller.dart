@@ -20,9 +20,9 @@ class LyricScroller extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.08),
+        color: Colors.black.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.black.withOpacity(0.07)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.07)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,7 +49,7 @@ class LyricScroller extends StatelessWidget {
               key: ValueKey(artistName),
               style: GoogleFonts.courierPrime(
                 fontSize: 13,
-                color: kTextDark.withOpacity(0.68),
+                color: kTextDark.withValues(alpha: 0.68),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -63,7 +63,7 @@ class LyricScroller extends StatelessWidget {
               key: ValueKey(albumName),
               style: GoogleFonts.courierPrime(
                 fontSize: 11,
-                color: kTextDark.withOpacity(0.42),
+                color: kTextDark.withValues(alpha: 0.42),
                 fontStyle: FontStyle.italic,
               ),
               maxLines: 1,

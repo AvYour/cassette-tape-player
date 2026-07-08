@@ -161,7 +161,7 @@ class _CassetteCardState extends State<CassetteCard>
                   widget.tape.artistName,
                   style: GoogleFonts.courierPrime(
                     fontSize: 9,
-                    color: kTextDark.withOpacity(0.65),
+                    color: kTextDark.withValues(alpha: 0.65),
                     letterSpacing: 0.6,
                   ),
                   maxLines: 1,
@@ -193,7 +193,7 @@ class _CassetteCardState extends State<CassetteCard>
                   widget.tape.year,
                   style: GoogleFonts.vt323(
                     fontSize: 10,
-                    color: kTextDark.withOpacity(0.45),
+                    color: kTextDark.withValues(alpha: 0.45),
                   ),
                   textAlign: TextAlign.center,
                 ),

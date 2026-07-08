@@ -40,7 +40,7 @@ class ReelPainter extends CustomPainter {
       center,
       r,
       Paint()
-        ..color = Colors.white.withOpacity(0.07)
+        ..color = Colors.white.withValues(alpha: 0.07)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2,
     );

@@ -16,7 +16,7 @@ class SpotifyAuth {
 
   static Future<bool> connect() async {
     try {
-      final token = await SpotifySdk.getAuthenticationToken(
+      final token = await SpotifySdk.getAccessToken(
         clientId: clientId,
         redirectUrl: redirectUri,
         scope: _scope,

@@ -32,7 +32,7 @@ class CassetteBodyPainter extends CustomPainter {
         const Radius.circular(12),
       ),
       Paint()
-        ..color = Colors.black.withOpacity(0.28)
+        ..color = Colors.black.withValues(alpha: 0.28)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
     );
   }
@@ -46,7 +46,7 @@ class CassetteBodyPainter extends CustomPainter {
     canvas.drawRRect(
       rrect,
       Paint()
-        ..color = Colors.white.withOpacity(0.14)
+        ..color = Colors.white.withValues(alpha: 0.14)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
@@ -66,12 +66,12 @@ class CassetteBodyPainter extends CustomPainter {
     );
     canvas.drawRRect(
       windowRect,
-      Paint()..color = const Color(0xFF0D0D0D).withOpacity(0.90),
+      Paint()..color = const Color(0xFF0D0D0D).withValues(alpha: 0.90),
     );
     canvas.drawRRect(
       windowRect,
       Paint()
-        ..color = Colors.white.withOpacity(0.07)
+        ..color = Colors.white.withValues(alpha: 0.07)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0,
     );
@@ -86,7 +86,7 @@ class CassetteBodyPainter extends CustomPainter {
     canvas.drawRRect(
       labelRRect,
       Paint()
-        ..color = Colors.black.withOpacity(0.10)
+        ..color = Colors.black.withValues(alpha: 0.10)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.6,
     );
@@ -99,12 +99,12 @@ class CassetteBodyPainter extends CustomPainter {
       center,
       r,
       Paint()
-        ..color = Colors.black.withOpacity(0.28)
+        ..color = Colors.black.withValues(alpha: 0.28)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.8,
     );
     final slotPaint = Paint()
-      ..color = Colors.black.withOpacity(0.45)
+      ..color = Colors.black.withValues(alpha: 0.45)
       ..strokeWidth = 1.0
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(center + const Offset(-2.5, 0), center + const Offset(2.5, 0), slotPaint);

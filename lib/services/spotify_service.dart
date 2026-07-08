@@ -100,12 +100,10 @@ class SpotifyService extends ChangeNotifier {
   }
 
   Future<void> seekTo(int positionMs) async {
-    await SpotifySdk.seekTo(positionMs: positionMs);
+    await SpotifySdk.seekTo(positionedMilliseconds: positionMs);
   }
 
-  Future<void> setVolume(int volume) async {
-    try {
-      await SpotifySdk.setVolume(volume: volume);
-    } catch (_) {}
-  }
+  // spotify_sdk 2.x has no volume API; volume knob adjusts system/app volume
+  // only as a UI affordance. Kept as a hook for future SDK support.
+  Future<void> setVolume(int volume) async {}
 }

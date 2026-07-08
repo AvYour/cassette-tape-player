@@ -169,7 +169,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           'VOLUME',
                           style: GoogleFonts.courierPrime(
                             fontSize: 9,
-                            color: kTextDark.withOpacity(0.45),
+                            color: kTextDark.withValues(alpha: 0.45),
                             letterSpacing: 2.5,
                           ),
                         ),
@@ -187,7 +187,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             'COUNTER',
                             style: GoogleFonts.courierPrime(
                               fontSize: 9,
-                              color: kTextDark.withOpacity(0.45),
+                              color: kTextDark.withValues(alpha: 0.45),
                               letterSpacing: 2.5,
                             ),
                           ),

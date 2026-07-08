@@ -138,7 +138,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           decoration: BoxDecoration(
                             color: _currentPage == i
                                 ? kTextDark
-                                : kTextDark.withOpacity(0.28),
+                                : kTextDark.withValues(alpha: 0.28),
                             borderRadius: BorderRadius.circular(3),
                           ),
                         );
@@ -173,7 +173,7 @@ class _ConnectButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1DB954).withOpacity(0.3),
+              color: const Color(0xFF1DB954).withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),

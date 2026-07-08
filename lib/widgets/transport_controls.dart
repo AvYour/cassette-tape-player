@@ -38,7 +38,7 @@ class TransportControls extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.55),
+            color: Colors.black.withValues(alpha: 0.55),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -144,7 +144,7 @@ class _TapeButtonState extends State<_TapeButton> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.65),
+                color: Colors.black.withValues(alpha: 0.65),
                 blurRadius: 5,
                 offset: const Offset(0, 2),
               ),
@@ -152,7 +152,7 @@ class _TapeButtonState extends State<_TapeButton> {
           ),
           child: Icon(
             widget.icon,
-            color: Colors.white.withOpacity(0.88),
+            color: Colors.white.withValues(alpha: 0.88),
             size: widget.iconSize,
           ),
         ),
