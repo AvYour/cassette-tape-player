@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../painters/cassette_body_painter.dart';
@@ -27,95 +28,126 @@ class CassetteCard extends StatefulWidget {
 
 class _CassetteCardState extends State<CassetteCard>
     with SingleTickerProviderStateMixin {
-  late AnimationController _reelController;
+  late final Ticker _ticker;
+
+  // Accumulated hub angles (radians) for the two reels.
+  final ValueNotifier<(double, double)> _angles =
+      ValueNotifier<(double, double)>((0, 0));
+  double _leftAngle = 0;
+  double _rightAngle = 0;
+
+  // Smoothly-ramped speed multiplier (see reference frame loop).
+  double _speedMul = 0;
+  double _lastT = 0;
+
+  // Base angular velocities (rad/s). The take-up (right) reel spins faster than
+  // the supply (left) reel by the wound-radius ratio, mirroring real physics.
+  static const double _baseRight = 2.094; // ~120 deg/s
+  static const double _baseLeft = _baseRight * (0.12 / 0.23); // ~62.6 deg/s
 
   @override
   void initState() {
     super.initState();
-    _reelController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-    _applyTapeState(widget.tapeState);
-  }
-
-  @override
-  void didUpdateWidget(CassetteCard old) {
-    super.didUpdateWidget(old);
-    if (old.tapeState != widget.tapeState) {
-      _applyTapeState(widget.tapeState);
-    }
-  }
-
-  void _applyTapeState(TapeState state) {
-    switch (state) {
-      case TapeState.playing:
-        _reelController.duration = const Duration(seconds: 2);
-        _reelController.repeat();
-      case TapeState.ff:
-        _reelController.duration = const Duration(milliseconds: 480);
-        _reelController.repeat();
-      case TapeState.rew:
-        _reelController.duration = const Duration(milliseconds: 480);
-        _reelController.repeat(reverse: true);
-      case TapeState.stopped:
-        _reelController.stop();
-    }
+    _ticker = createTicker(_onTick)..start();
   }
 
   @override
   void dispose() {
-    _reelController.dispose();
+    _ticker.dispose();
+    _angles.dispose();
     super.dispose();
   }
 
+  double get _targetSpeed {
+    switch (widget.tapeState) {
+      case TapeState.playing:
+        return 1.0;
+      case TapeState.ff:
+        return 6.0;
+      case TapeState.rew:
+        return -6.0;
+      case TapeState.stopped:
+        return 0.0;
+    }
+  }
+
+  void _onTick(Duration elapsed) {
+    final now = elapsed.inMicroseconds / 1e6;
+    final dt = (now - _lastT).clamp(0.0, 0.05);
+    _lastT = now;
+
+    // Ease the speed multiplier toward the target for smooth start/stop.
+    _speedMul += (_targetSpeed - _speedMul) * (dt * 4.0);
+
+    // Subtle motor wobble (±3%, 4-second period) while playing.
+    final wobble = widget.tapeState == TapeState.playing
+        ? 1.0 + 0.03 * sin(now * (2 * pi / 4.0))
+        : 1.0;
+
+    _leftAngle += _baseLeft * _speedMul * wobble * dt;
+    _rightAngle += _baseRight * _speedMul * wobble * dt;
+    _angles.value = (_leftAngle, _rightAngle);
+  }
+
   Widget _buildWindowContent(double ww, double wh) {
-    final maxR = wh * 0.42;
-    final minR = wh * 0.24;
-    final leftR = (maxR * (1 - widget.progress * 0.4)).clamp(minR, maxR);
-    final rightR = (minR + (maxR - minR) * widget.progress).clamp(minR, maxR);
+    // Fixed reel geometry: the spool radius varies with progress, the hub does
+    // not. Boxes are sized to the maximum spool so the hub stays put.
+    final maxR = min(wh * 0.44, ww * 0.19);
+    final minR = maxR * 0.48;
+    final hubR = maxR * 0.40;
+    final span = maxR - minR;
+
+    final leftSpool = maxR - span * widget.progress; // supply unwinds
+    final rightSpool = minR + span * widget.progress; // take-up winds
+
+    final leftCenter = Offset(ww * 0.29, wh * 0.5);
+    final rightCenter = Offset(ww * 0.71, wh * 0.5);
+    final box = maxR * 2;
 
     return RepaintBoundary(
-      child: AnimatedBuilder(
-        animation: _reelController,
-        builder: (context, _) {
-          final angle = _reelController.value * 2 * pi;
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: TapeStripPainter(progress: widget.progress),
-                ),
-              ),
-              Positioned(
-                left: ww * 0.20 - leftR,
-                top: wh * 0.50 - leftR,
-                width: leftR * 2,
-                height: leftR * 2,
-                child: CustomPaint(
-                  painter: ReelPainter(
-                    rotationAngle: -angle,
-                    radius: leftR,
-                    isLeft: true,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: TapeStripPainter(progress: widget.progress),
+            ),
+          ),
+          ValueListenableBuilder<(double, double)>(
+            valueListenable: _angles,
+            builder: (context, angles, _) {
+              return Stack(
+                children: [
+                  Positioned(
+                    left: leftCenter.dx - maxR,
+                    top: leftCenter.dy - maxR,
+                    width: box,
+                    height: box,
+                    child: CustomPaint(
+                      painter: ReelPainter(
+                        rotation: angles.$1,
+                        spoolRadius: leftSpool,
+                        hubRadius: hubR,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              Positioned(
-                left: ww * 0.80 - rightR,
-                top: wh * 0.50 - rightR,
-                width: rightR * 2,
-                height: rightR * 2,
-                child: CustomPaint(
-                  painter: ReelPainter(
-                    rotationAngle: angle,
-                    radius: rightR,
-                    isLeft: false,
+                  Positioned(
+                    left: rightCenter.dx - maxR,
+                    top: rightCenter.dy - maxR,
+                    width: box,
+                    height: box,
+                    child: CustomPaint(
+                      painter: ReelPainter(
+                        rotation: angles.$2,
+                        spoolRadius: rightSpool,
+                        hubRadius: hubR,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ],
-          );
-        },
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
