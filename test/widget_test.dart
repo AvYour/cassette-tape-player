@@ -5,6 +5,6 @@ void main() {
   testWidgets('App boots to library screen', (WidgetTester tester) async {
     await tester.pumpWidget(const CassettePlayerApp());
     await tester.pump();
-    expect(find.text('MY TAPES'), findsOneWidget);
+    expect(find.text('MIXTAPES'), findsOneWidget);
   });
 }

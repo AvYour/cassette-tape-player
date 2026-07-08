@@ -1,14 +1,41 @@
 import 'package:flutter/material.dart';
 
-const Color kBackground1 = Color(0xFFFAF6F0);
-const Color kBackground2 = Color(0xFFDFD6C2);
-const Color kControlPanel = Color(0xFF151515);
+// Palette ported one-to-one from the reference cassette UI.
+const Color kVintageInk = Color(0xFFA19385);
+const Color kActiveLyric = Color(0xFF3E2723);
 const Color kTextDark = Color(0xFF221F1C);
 
-const List<Map<String, Color>> kTapePalette = [
-  {'body': Color(0xFFE6DBC4), 'stripe': Color(0xFFD94532)},
-  {'body': Color(0xFF2A2A2A), 'stripe': Color(0xFFD6A033)},
-  {'body': Color(0xFFE86658), 'stripe': Color(0xFF1E3A5F)},
-  {'body': Color(0xFF1E3A5F), 'stripe': Color(0xFFE25A3B)},
-  {'body': Color(0xFF2E4035), 'stripe': Color(0xFFD6A033)},
+const Color kBgCenter = Color(0xFFFAF6F0);
+const Color kBgEdge = Color(0xFFDFD6C2);
+const Color kBgVignette = Color(0x1A4A3B2A);
+
+const Color kTapeBrown = Color(0xFF523321);
+const Color kTapeDark = Color(0xFF22140D);
+const Color kWindowBg = Color(0xFF0D0D0D);
+
+const Color kControlPanelBg = Color(0xFF151515);
+const Color kMark = Color(0xFF7A7366);
+
+const Color kGold = Color(0xFFD6A033);
+const Color kCream = Color(0xFFDCD5C6);
+
+/// Darkens by scaling RGB toward black (reference `Color.darken`).
+Color darken(Color c, [double fraction = 0.2]) =>
+    Color.lerp(c, const Color(0xFF000000), fraction)!;
+
+/// body / label / stripe color set for a tape shell.
+class TapeColors {
+  final Color body;
+  final Color label;
+  final Color stripe;
+
+  const TapeColors(this.body, this.label, this.stripe);
+}
+
+const List<TapeColors> kTapePalette = [
+  TapeColors(Color(0xFFE6DBC4), Color(0xFFF4EFE6), Color(0xFFD94532)),
+  TapeColors(Color(0xFF2A2A2A), Color(0xFFDCD5C6), Color(0xFFD6A033)),
+  TapeColors(Color(0xFFE86658), Color(0xFFF4EFE6), Color(0xFF1E3A5F)),
+  TapeColors(Color(0xFF1E3A5F), Color(0xFFE0E0E0), Color(0xFFE25A3B)),
+  TapeColors(Color(0xFF2E4035), Color(0xFFE8E3D5), Color(0xFFD6A033)),
 ];

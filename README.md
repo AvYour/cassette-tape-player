@@ -4,13 +4,14 @@ A skeuomorphic cassette tape music player for Android, built with Flutter and co
 
 ## Features
 
-- **Hand-drawn cassette UI** — every element (shell, screws, reels, tape ribbon, VU meter) rendered with `CustomPainter`, no image assets
-- **Live reel animation** — reels spin at play/FF/REW speeds; supply reel shrinks and take-up reel grows as the track progresses
-- **Spotify playback** — play, pause, skip, and seek real tracks via the Spotify app through `spotify_sdk`
-- **Recently played → tapes** — your Spotify history maps to a swipeable carousel of cassettes
-- **Rotary volume knob** — pan-gesture dial with tick detents and haptic feedback
-- **Mechanical tape counter** — three-digit rolling counter driven by playback position
-- **Hero transitions** — tapes fly from the library carousel into the player
+- **Hand-drawn cassette UI** — every element (shell, paper label, wound spools, hubs, capstan holes, screws) rendered with `CustomPainter`, no image assets
+- **Live reel animation** — a frame-loop drives both hubs with eased speed ramps, a supply/take-up speed ratio, and subtle motor wobble; 6x wind for FF/REW
+- **Spotify playback** — play, pause, and resume real tracks via the Spotify app through `spotify_sdk`
+- **Recently played → tapes** — your Spotify history maps to a swipeable carousel of upright cassettes
+- **J-card marquee header** — scrolling now-playing spine with side-A badge
+- **Scrolling lyric reel** — center-focused lines that wind and rewind with the tape
+- **Component panel** — slide volume tuner plus five piano-key transport buttons with spring press physics and haptics
+- **Rotating hero transition** — tapes swing from their upright library pose into the player
 
 ## Tech Stack
 
