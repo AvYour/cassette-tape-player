@@ -342,6 +342,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     return Scaffold(
       body: DynamicMusicBackground(
         tape: _tape,
+        progress: _lyricProgress,
         child: SafeArea(
           child: Column(
             children: [

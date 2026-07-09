@@ -6,10 +6,57 @@ import '../utils/colors.dart';
 /// shell echoes its cover. Results are cached per image URL.
 class PaletteService {
   static final Map<String, TapeColors> _cache = {};
+  static final Map<String, List<Color>> _swatchCache = {};
   static final Set<String> _inflight = {};
+  static final Set<String> _swatchInflight = {};
 
   static TapeColors? cached(String? url) =>
       (url == null || url.isEmpty) ? null : _cache[url];
+
+  static List<Color>? cachedSwatches(String? url) =>
+      (url == null || url.isEmpty) ? null : _swatchCache[url];
+
+  /// Extracts several vivid swatches from the album art for the animated
+  /// background to cycle through as the song/lyrics progress.
+  static Future<List<Color>?> resolveSwatches(String url) async {
+    if (_swatchCache.containsKey(url)) return _swatchCache[url];
+    if (_swatchInflight.contains(url)) return null;
+    _swatchInflight.add(url);
+    try {
+      final gen = await PaletteGenerator.fromImageProvider(
+        NetworkImage(url),
+        size: const Size(120, 120),
+        maximumColorCount: 16,
+      );
+      final raw = <Color?>[
+        gen.vibrantColor?.color,
+        gen.lightVibrantColor?.color,
+        gen.mutedColor?.color,
+        gen.darkVibrantColor?.color,
+        gen.dominantColor?.color,
+        gen.lightMutedColor?.color,
+      ];
+      final swatches = raw
+          .whereType<Color>()
+          .map((c) => _vivid(c))
+          .toList();
+      if (swatches.length < 2) return null;
+      _swatchCache[url] = swatches;
+      return swatches;
+    } catch (_) {
+      return null;
+    } finally {
+      _swatchInflight.remove(url);
+    }
+  }
+
+  static Color _vivid(Color c) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl
+        .withSaturation(hsl.saturation.clamp(0.55, 1.0))
+        .withLightness(hsl.lightness.clamp(0.5, 0.66))
+        .toColor();
+  }
 
   static Future<TapeColors?> resolve(String url) async {
     if (_cache.containsKey(url)) return _cache[url];
