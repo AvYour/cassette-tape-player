@@ -179,7 +179,7 @@ class _SearchScreenState extends State<SearchScreen> {
       return _hint('Type a song or artist to find tapes.');
     }
     if (_results.isEmpty) {
-      return _hint('No tapes found for "$_lastQuery".');
+      return _hint(svc.searchError ?? 'No tapes found for "$_lastQuery".');
     }
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),

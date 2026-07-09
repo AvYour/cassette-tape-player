@@ -23,6 +23,7 @@ class SpotifyService extends ChangeNotifier {
   static const Duration _demoTick = Duration(milliseconds: 200);
 
   String? _statusMessage;
+  String? _searchError;
 
   bool get isConnected => _isConnected;
   bool get isLoading => _isLoading;
@@ -35,6 +36,18 @@ class SpotifyService extends ChangeNotifier {
   /// A short human-readable note about the last connect result, e.g. why
   /// playlists/search are unavailable. Null when everything is fine.
   String? get statusMessage => _statusMessage;
+
+  /// Last search error (e.g. the message Spotify returned on a non-200).
+  String? get searchError => _searchError;
+
+  /// Extracts Spotify's `error.message` from a JSON error body, if present.
+  String _apiError(int status, String body) {
+    try {
+      final msg = json.decode(body)['error']?['message'];
+      if (msg is String && msg.isNotEmpty) return 'HTTP $status: $msg';
+    } catch (_) {}
+    return 'HTTP $status';
+  }
 
   bool get isPlaying {
     if (!_isConnected) return _demoPlaying;
@@ -131,7 +144,7 @@ class SpotifyService extends ChangeNotifier {
     try {
       final res = await http.get(
         Uri.parse(
-            'https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50&market=from_token'),
+            'https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50'),
         headers: _authHeader,
       );
       if (res.statusCode == 200) {
@@ -152,7 +165,7 @@ class SpotifyService extends ChangeNotifier {
         }
       } else {
         playlist.tapes = [];
-        playlist.loadError = 'HTTP ${res.statusCode}';
+        playlist.loadError = _apiError(res.statusCode, res.body);
       }
     } catch (e) {
       playlist.tapes = [];
@@ -164,24 +177,31 @@ class SpotifyService extends ChangeNotifier {
 
   /// Searches Spotify's catalogue for tracks matching [query].
   Future<List<CassetteTape>> searchTracks(String query) async {
+    _searchError = null;
     final token = SpotifyAuth.accessToken;
     if (token == null || query.trim().isEmpty) return [];
     try {
       final res = await http.get(
         Uri.parse(
-            'https://api.spotify.com/v1/search?type=track&limit=20&q=${Uri.encodeQueryComponent(query)}'),
+            'https://api.spotify.com/v1/search?type=track&limit=21&q=${Uri.encodeQueryComponent(query)}'),
         headers: _authHeader,
       );
-      if (res.statusCode != 200) return [];
-      final items = (json.decode(res.body)['tracks']?['items'] as List?)
-              ?.cast<Map<String, dynamic>>() ??
-          [];
-      return items
-          .asMap()
-          .entries
-          .map((e) => CassetteTape.fromSpotifyTrack(e.value, e.key))
-          .toList();
-    } catch (_) {
+      if (res.statusCode != 200) {
+        _searchError = _apiError(res.statusCode, res.body);
+        return [];
+      }
+      final items = (json.decode(res.body)['tracks']?['items'] as List?) ?? [];
+      final tapes = <CassetteTape>[];
+      for (final item in items) {
+        if (item is Map<String, dynamic> && item['id'] != null) {
+          try {
+            tapes.add(CassetteTape.fromSpotifyTrack(item, tapes.length));
+          } catch (_) {}
+        }
+      }
+      return tapes;
+    } catch (e) {
+      _searchError = 'Error: $e';
       return [];
     }
   }

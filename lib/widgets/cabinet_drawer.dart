@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
-import '../painters/cassette_tape_painter.dart';
 import '../utils/colors.dart';
-import 'cassette_tape_view.dart';
+import 'cassette_spine.dart';
 
 /// A filing-cabinet drawer representing one playlist. Closed, it shows a wooden
 /// drawer face with a metal handle and label. Tapping pulls the drawer open —
@@ -241,33 +240,16 @@ class _DrawerTray extends StatelessWidget {
         ),
       );
     }
-    // Upright cassette: portrait footprint derived from the tray height.
-    const trayHeight = 210.0;
-    const uprightHeight = trayHeight - 40; // vertical padding
-    const uprightWidth = uprightHeight / kCassetteAspect;
+    // Tapes stand filed on their edge, showing only their labelled spine.
     return ListView.builder(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       itemCount: list.length,
       itemBuilder: (context, i) {
         final tape = list[i];
         return Padding(
-          padding: const EdgeInsets.only(right: 14),
-          child: GestureDetector(
-            onTap: () => onTapeTap(tape),
-            child: SizedBox(
-              width: uprightWidth,
-              height: uprightHeight,
-              child: Hero(
-                tag: 'tape_${tape.id}',
-                flightShuttleBuilder: cassetteFlightShuttle(tape),
-                child: RotatedBox(
-                  quarterTurns: 3,
-                  child: CassetteTapeView(tape: tape),
-                ),
-              ),
-            ),
-          ),
+          padding: const EdgeInsets.only(right: 10),
+          child: CassetteSpine(tape: tape, onTap: () => onTapeTap(tape)),
         );
       },
     );
