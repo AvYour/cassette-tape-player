@@ -66,10 +66,19 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _audioStarted = false;
   bool _advancing = false;
 
-  // Estimated playback position (ms). Snapped to Spotify events and
-  // interpolated by elapsed time between them so lyrics scroll smoothly.
+  // Playback position (ms), anchored to a known position + wall-clock time so
+  // it stays correct even while the app (and its ticker) is backgrounded.
   double _positionMs = 0;
+  double _anchorPosMs = 0;
+  DateTime _anchorWall = DateTime.now();
   int _lastEventPos = -1;
+
+  /// Re-anchor the position estimate to [posMs] as of now.
+  void _anchor(double posMs) {
+    _anchorPosMs = posMs;
+    _anchorWall = DateTime.now();
+    _positionMs = posMs;
+  }
 
   // Lyrics: liner notes by default, replaced by lrclib results when found.
   late List<String> _lyrics = _tape.lyrics;
@@ -90,7 +99,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _audioStarted = true;
       svc.fetchPositionMs().then((ms) {
         if (ms != null && mounted) {
-          _positionMs = ms.toDouble();
+          _anchor(ms.toDouble());
           _lastEventPos = ms;
         }
       });
@@ -107,7 +116,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (state == AppLifecycleState.resumed && _tapeState == TapeState.playing) {
       widget.spotifyService.fetchPositionMs().then((ms) {
         if (ms != null && mounted) {
-          _positionMs = ms.toDouble();
+          _anchor(ms.toDouble());
           _lastEventPos = ms;
         }
       });
@@ -138,7 +147,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _lyricTimesMs = null;
       _tapeState = TapeState.playing;
     });
-    _positionMs = 0;
+    _anchor(0);
     _lastEventPos = -1;
     _speedMul = 0;
     _lyricProgress.value = 0;
@@ -170,7 +179,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// Restart the current tape if we're past the intro, otherwise go back one.
   void _skipPrevious() {
     if (_positionMs > 3000 || _index == 0) {
-      _positionMs = 0;
+      _anchor(0);
       _lyricProgress.value = 0;
       if (widget.spotifyService.isConnected) widget.spotifyService.seekTo(0);
     } else {
@@ -267,25 +276,28 @@ class _PlayerScreenState extends State<PlayerScreen>
     final svc = widget.spotifyService;
     final dur = _tape.durationMs.toDouble();
 
+    // Snap the anchor to fresh Spotify events (position at event time).
     if (svc.isConnected && _tapeState == TapeState.playing) {
       final st = svc.playerState;
       if (st != null && st.playbackPosition != _lastEventPos) {
-        _positionMs = st.playbackPosition.toDouble();
         _lastEventPos = st.playbackPosition;
+        _anchor(st.playbackPosition.toDouble());
       }
     }
 
     switch (_tapeState) {
       case TapeState.playing:
-        _positionMs += dt * 1000;
+        // Derive from wall clock so backgrounded time is included.
+        final elapsed =
+            DateTime.now().difference(_anchorWall).inMilliseconds.toDouble();
+        _positionMs = (_anchorPosMs + elapsed).clamp(0.0, dur);
       case TapeState.ff:
-        _positionMs += dt * 1000 * 8;
+        _anchor((_positionMs + dt * 1000 * 8).clamp(0.0, dur));
       case TapeState.rew:
-        _positionMs -= dt * 1000 * 8;
+        _anchor((_positionMs - dt * 1000 * 8).clamp(0.0, dur));
       case TapeState.stopped:
-        break;
+        _anchor(_positionMs);
     }
-    _positionMs = _positionMs.clamp(0.0, dur);
   }
 
   /// Places the lyric reel from [_positionMs] (synced or proportional).
