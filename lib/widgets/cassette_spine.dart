@@ -13,7 +13,11 @@ class CassetteSpine extends StatelessWidget {
 
   const CassetteSpine({super.key, required this.tape, required this.onTap});
 
-  static const double width = 96;
+  static const double width = 66;
+
+  // The album-art cap is shorter than the spine width so the cream label below
+  // gets most of the room and the text stays large and readable.
+  static const double _capHeight = width * 0.72;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +66,7 @@ class CassetteSpine extends StatelessWidget {
       return ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
         child: SizedBox(
-          height: width,
+          height: _capHeight,
           width: width,
           child: Image.network(
             art,
@@ -80,7 +84,7 @@ class CassetteSpine extends StatelessWidget {
   // The dark top edge of a cassette with its two head openings.
   Widget _slotCap() {
     return Container(
-      height: width,
+      height: _capHeight,
       decoration: const BoxDecoration(
         color: Color(0xFF161616),
         borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
@@ -109,7 +113,7 @@ class CassetteSpine extends StatelessWidget {
 
   Widget _label() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+      margin: const EdgeInsets.fromLTRB(3, 5, 3, 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF5EEDD),
         borderRadius: BorderRadius.circular(2),
@@ -139,7 +143,7 @@ class CassetteSpine extends StatelessWidget {
                     maxLines: 1,
                     softWrap: false,
                     style: GoogleFonts.specialElite(
-                      fontSize: 13,
+                      fontSize: 14,
                       color: kTextDark,
                       fontWeight: FontWeight.bold,
                     ),
