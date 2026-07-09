@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:spotify_sdk/spotify_sdk.dart';
 import 'package:spotify_sdk/models/player_state.dart';
 import '../models/cassette_tape.dart';
@@ -10,7 +8,7 @@ import 'spotify_auth.dart';
 class SpotifyService extends ChangeNotifier {
   bool _isConnected = false;
   bool _isLoading = false;
-  List<CassetteTape> _tapes = CassetteTape.demoTapes;
+  final List<CassetteTape> _tapes = CassetteTape.demoTapes;
   PlayerState? _playerState;
 
   // --- Demo playback simulation (used when not connected to Spotify) ---
@@ -46,7 +44,6 @@ class SpotifyService extends ChangeNotifier {
 
     _isConnected = await SpotifyAuth.connect();
     if (_isConnected) {
-      await _fetchTapes();
       _subscribeToPlayerState();
     }
 
@@ -61,38 +58,9 @@ class SpotifyService extends ChangeNotifier {
     });
   }
 
-  Future<void> _fetchTapes() async {
-    try {
-      final token = await SpotifyAuth.getToken();
-      if (token == null) return;
-      final tracks = await _getRecentlyPlayed(token);
-      if (tracks.isNotEmpty) {
-        _tapes = tracks;
-        notifyListeners();
-      }
-    } catch (_) {}
-  }
-
-  Future<List<CassetteTape>> _getRecentlyPlayed(String token) async {
-    final response = await http.get(
-      Uri.parse('https://api.spotify.com/v1/me/player/recently-played?limit=20'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (response.statusCode != 200) return CassetteTape.demoTapes;
-
-    final data = json.decode(response.body) as Map<String, dynamic>;
-    final items = (data['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-
-    return items.asMap().entries.map((e) {
-      return CassetteTape.fromSpotifyTrack(
-        e.value['track'] as Map<String, dynamic>,
-        e.key,
-      );
-    }).toList();
-  }
-
-  /// Start playing a tape. Uses Spotify when connected, otherwise runs the
-  /// local demo simulation so the reels spin and the counter advances.
+  /// Start playing a tape. Plays the real track through Spotify when connected
+  /// (and the tape has a URI); otherwise runs the local demo simulation so the
+  /// reels still spin and the lyrics still scroll.
   Future<void> playTape(CassetteTape tape) async {
     if (_isConnected && tape.spotifyUri.isNotEmpty) {
       await SpotifySdk.play(spotifyUri: tape.spotifyUri);
