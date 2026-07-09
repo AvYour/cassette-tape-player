@@ -125,7 +125,9 @@ class _PlayerScreenState extends State<PlayerScreen>
       album: t.albumName,
       durationMs: t.durationMs,
     );
-    if (!mounted || t.id != _tape.id || lyrics == null || lyrics.isEmpty) return;
+    if (!mounted || t.id != _tape.id || lyrics == null || lyrics.isEmpty) {
+      return;
+    }
     setState(() {
       _lyrics = lyrics.lines;
       _lyricTimesMs = lyrics.timesMs;
@@ -258,7 +260,9 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     // Roll on to the next tape when this one finishes.
     final dur = _tape.durationMs.toDouble();
-    if (_tapeState == TapeState.playing && dur > 1000 && _positionMs >= dur - 250) {
+    if (_tapeState == TapeState.playing &&
+        dur > 1000 &&
+        _positionMs >= dur - 250) {
       _advanceToNext();
     }
   }
@@ -329,9 +333,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     final routeAnim =
         ModalRoute.of(context)?.animation ?? kAlwaysCompleteAnimation;
     final headerAnim = CurvedAnimation(
-        parent: routeAnim, curve: const Interval(0.3, 1, curve: Curves.easeOutCubic));
+        parent: routeAnim,
+        curve: const Interval(0.3, 1, curve: Curves.easeOutCubic));
     final panelAnim = CurvedAnimation(
-        parent: routeAnim, curve: const Interval(0.4, 1, curve: Curves.easeOutCubic));
+        parent: routeAnim,
+        curve: const Interval(0.4, 1, curve: Curves.easeOutCubic));
 
     return Scaffold(
       body: DynamicMusicBackground(
@@ -340,7 +346,8 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Row(
                   children: [
                     SizedBox(
@@ -510,16 +517,16 @@ class _PlayerScreenState extends State<PlayerScreen>
                     const SizedBox(width: 4),
                     Expanded(
                       child: SkeuoButton(
-                        icon: RetroIcon.stop,
-                        onPressed: () => _setTapeState(TapeState.stopped),
+                        icon: RetroIcon.next,
+                        enabled: _index + 1 < widget.queue.length,
+                        onPressed: _skipNext,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: SkeuoButton(
-                        icon: RetroIcon.next,
-                        enabled: _index + 1 < widget.queue.length,
-                        onPressed: _skipNext,
+                        icon: RetroIcon.stop,
+                        onPressed: () => _setTapeState(TapeState.stopped),
                       ),
                     ),
                   ],
@@ -589,4 +596,3 @@ class _BackingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_BackingPainter old) => false;
 }
-

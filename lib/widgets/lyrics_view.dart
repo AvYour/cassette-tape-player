@@ -83,13 +83,14 @@ class _LyricsPainter extends CustomPainter {
       canvas.scale(scale);
       canvas.translate(-tp.width / 2, -tp.height / 2);
 
-      // Warm glow behind the active line (reference blurred shadow rect).
+      // Soft white glow behind the active line so it reads over the flowing
+      // background — neutral, not a brown wash.
       if (distance < 1.2) {
         canvas.drawRect(
           Rect.fromLTWH(0, 0, tp.width, tp.height),
           Paint()
-            ..color = Color.fromARGB((alpha * 140).round(), 240, 225, 195)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+            ..color = Color.fromARGB((alpha * 150).round(), 255, 255, 255)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
         );
       }
       tp.paint(canvas, Offset.zero);
