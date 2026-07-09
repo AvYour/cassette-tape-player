@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/cassette_tape.dart';
 import '../painters/cassette_tape_painter.dart';
+import 'tape_color_builder.dart';
 
 /// Rotation state for the two reel hubs, in degrees. Mutated by the player's
 /// frame loop; the hub layer listens directly so only it repaints per frame.
@@ -33,11 +34,14 @@ class CassetteTapeView extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CustomPaint(
-            painter: CassetteBasePainter(
-              bodyColor: tape.bodyColor,
-              labelColor: tape.labelColor,
-              stripeColor: tape.stripeColor,
+          TapeColorBuilder(
+            tape: tape,
+            builder: (context, colors) => CustomPaint(
+              painter: CassetteBasePainter(
+                bodyColor: colors.body,
+                labelColor: colors.label,
+                stripeColor: colors.stripe,
+              ),
             ),
           ),
           RepaintBoundary(

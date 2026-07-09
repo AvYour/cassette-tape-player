@@ -20,14 +20,23 @@ import '../widgets/volume_tuner.dart';
 /// scrolling lyrics and the skeuomorphic component panel — a port of the
 /// reference `PlayerScreen` and its frame loop.
 class PlayerScreen extends StatefulWidget {
-  final CassetteTape tape;
+  final List<CassetteTape> queue;
+  final int index;
   final SpotifyService spotifyService;
 
   const PlayerScreen({
     super.key,
-    required this.tape,
+    required this.queue,
+    required this.index,
     required this.spotifyService,
   });
+
+  /// Convenience for a single tape with no auto-advance queue.
+  PlayerScreen.single({
+    Key? key,
+    required CassetteTape tape,
+    required SpotifyService spotifyService,
+  }) : this(key: key, queue: [tape], index: 0, spotifyService: spotifyService);
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -47,11 +56,15 @@ class _PlayerScreenState extends State<PlayerScreen>
   TapeState _tapeState = TapeState.stopped;
   double _volume = 0.7;
 
+  late int _index = widget.index;
+  CassetteTape get _tape => widget.queue[_index];
+
   double _left = 0;
   double _right = 0;
   double _speedMul = 0;
   Duration _last = Duration.zero;
   bool _audioStarted = false;
+  bool _advancing = false;
 
   // Estimated playback position (ms). Snapped to Spotify events and
   // interpolated by elapsed time between them so lyrics scroll smoothly.
@@ -59,7 +72,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   int _lastEventPos = -1;
 
   // Lyrics: liner notes by default, replaced by lrclib results when found.
-  late List<String> _lyrics = widget.tape.lyrics;
+  late List<String> _lyrics = _tape.lyrics;
   List<int>? _lyricTimesMs; // set when synced lyrics are available
 
   @override
@@ -70,17 +83,45 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Future<void> _fetchLyrics() async {
-    final t = widget.tape;
+    final t = _tape;
     final lyrics = await LyricsService.fetch(
       track: t.trackName,
       artist: t.artistName,
       album: t.albumName,
       durationMs: t.durationMs,
     );
-    if (!mounted || lyrics == null || lyrics.isEmpty) return;
+    if (!mounted || t.id != _tape.id || lyrics == null || lyrics.isEmpty) return;
     setState(() {
       _lyrics = lyrics.lines;
       _lyricTimesMs = lyrics.timesMs;
+    });
+  }
+
+  /// When the track ends, roll on to the next tape in the queue and keep
+  /// playing — like flipping to the next song on a mixtape.
+  void _advanceToNext() {
+    if (_advancing) return;
+    if (_index + 1 >= widget.queue.length) {
+      _setTapeState(TapeState.stopped);
+      return;
+    }
+    _advancing = true;
+    setState(() {
+      _index++;
+      _lyrics = _tape.lyrics;
+      _lyricTimesMs = null;
+      _tapeState = TapeState.playing;
+    });
+    _positionMs = 0;
+    _lastEventPos = -1;
+    _speedMul = 0;
+    _lyricProgress.value = 0;
+    _audioStarted = true;
+    widget.spotifyService.playTape(_tape);
+    _fetchLyrics();
+    // Release the guard once playback of the new track has begun.
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) _advancing = false;
     });
   }
 
@@ -108,7 +149,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       case TapeState.playing:
         if (!_audioStarted) {
           _audioStarted = true;
-          svc.playTape(widget.tape);
+          svc.playTape(_tape);
         } else {
           // Resume at the (possibly scrubbed) position.
           svc.seekTo(_positionMs.round());
@@ -155,6 +196,12 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     _updatePosition(dt);
     _updateLyricProgress();
+
+    // Roll on to the next tape when this one finishes.
+    final dur = _tape.durationMs.toDouble();
+    if (_tapeState == TapeState.playing && dur > 1000 && _positionMs >= dur - 250) {
+      _advanceToNext();
+    }
   }
 
   /// Keeps [_positionMs] in step with playback: snap to Spotify events (which
@@ -162,7 +209,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// FF/REW.
   void _updatePosition(double dt) {
     final svc = widget.spotifyService;
-    final dur = widget.tape.durationMs.toDouble();
+    final dur = _tape.durationMs.toDouble();
 
     if (svc.isConnected && _tapeState == TapeState.playing) {
       final st = svc.playerState;
@@ -204,7 +251,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
       _lyricProgress.value = (i + frac).clamp(0.0, maxProgress);
     } else {
-      final dur = widget.tape.durationMs.toDouble();
+      final dur = _tape.durationMs.toDouble();
       final ratio = dur > 0 ? _positionMs / dur : 0.0;
       _lyricProgress.value = (ratio * maxProgress).clamp(0.0, maxProgress);
     }
@@ -249,7 +296,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     child: SizedBox(
                       height: 40,
                       child: VintageTitleHeader(
-                        tape: widget.tape,
+                        tape: _tape,
                         tapeState: _tapeState,
                       ),
                     ),
@@ -260,9 +307,9 @@ class _PlayerScreenState extends State<PlayerScreen>
               FractionallySizedBox(
                 widthFactor: 0.9,
                 child: Hero(
-                  tag: 'tape_${widget.tape.id}',
-                  flightShuttleBuilder: cassetteFlightShuttle(widget.tape),
-                  child: _PlayerCassette(tape: widget.tape, angles: _angles),
+                  tag: 'tape_${_tape.id}',
+                  flightShuttleBuilder: cassetteFlightShuttle(_tape),
+                  child: _PlayerCassette(tape: _tape, angles: _angles),
                 ),
               ),
               const SizedBox(height: 24),

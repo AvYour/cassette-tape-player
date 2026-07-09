@@ -37,7 +37,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
     });
   }
 
-  void _openPlayer(CassetteTape tape) {
+  void _openPlayer(List<CassetteTape> queue, int index) {
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -45,7 +45,11 @@ class _CabinetScreenState extends State<CabinetScreen> {
         reverseTransitionDuration: const Duration(milliseconds: 450),
         pageBuilder: (context, animation, _) => FadeTransition(
           opacity: animation,
-          child: PlayerScreen(tape: tape, spotifyService: svc),
+          child: PlayerScreen(
+            queue: queue,
+            index: index,
+            spotifyService: svc,
+          ),
         ),
       ),
     );

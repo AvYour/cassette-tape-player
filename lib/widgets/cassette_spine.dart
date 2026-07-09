@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../utils/colors.dart';
+import 'tape_color_builder.dart';
 
 /// A cassette seen edge-on — the way tapes stand filed in a drawer. Shows a
 /// small album-art thumbnail on the top cap and the title/artist printed up
-/// the cream spine label. Compact, so many fit in a drawer at once.
+/// the cream spine label. Its shell color is drawn from the album art.
 class CassetteSpine extends StatelessWidget {
   final CassetteTape tape;
   final VoidCallback onTap;
@@ -16,37 +17,40 @@ class CassetteSpine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: width,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(4),
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              tape.bodyColor,
-              darken(tape.bodyColor, 0.18),
-              tape.bodyColor,
-            ],
-            stops: const [0.0, 0.5, 1.0],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.35),
-              blurRadius: 6,
-              offset: const Offset(2, 4),
+    return TapeColorBuilder(
+      tape: tape,
+      builder: (context, colors) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: width,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                colors.body,
+                darken(colors.body, 0.18),
+                colors.body,
+              ],
+              stops: const [0.0, 0.5, 1.0],
             ),
-          ],
-        ),
-        child: Column(
-          children: [
-            _topCap(),
-            Container(height: 4, color: tape.stripeColor),
-            Expanded(child: _label()),
-            _bottomNotch(),
-          ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 6,
+                offset: const Offset(2, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _topCap(),
+              Container(height: 4, color: colors.stripe),
+              Expanded(child: _label()),
+              _bottomNotch(),
+            ],
+          ),
         ),
       ),
     );

@@ -62,7 +62,7 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  void _openPlayer(CassetteTape tape) {
+  void _openPlayer(int index) {
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -70,7 +70,11 @@ class _SearchScreenState extends State<SearchScreen> {
         reverseTransitionDuration: const Duration(milliseconds: 450),
         pageBuilder: (context, animation, _) => FadeTransition(
           opacity: animation,
-          child: PlayerScreen(tape: tape, spotifyService: svc),
+          child: PlayerScreen(
+            queue: _results,
+            index: index,
+            spotifyService: svc,
+          ),
         ),
       ),
     );
@@ -186,7 +190,7 @@ class _SearchScreenState extends State<SearchScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: 6),
       itemBuilder: (context, i) => _ResultRow(
         tape: _results[i],
-        onTap: () => _openPlayer(_results[i]),
+        onTap: () => _openPlayer(i),
       ),
     );
   }

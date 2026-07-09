@@ -16,7 +16,7 @@ class CabinetDrawer extends StatelessWidget {
   final bool loading;
   final List<CassetteTape>? tapes;
   final String? loadError;
-  final void Function(CassetteTape tape) onTapeTap;
+  final void Function(List<CassetteTape> queue, int index) onTapeTap;
 
   const CabinetDrawer({
     super.key,
@@ -282,7 +282,7 @@ class _DrawerTray extends StatelessWidget {
   final bool loading;
   final List<CassetteTape>? tapes;
   final String? loadError;
-  final void Function(CassetteTape tape) onTapeTap;
+  final void Function(List<CassetteTape> queue, int index) onTapeTap;
 
   const _DrawerTray({
     required this.loading,
@@ -349,7 +349,7 @@ class _DrawerTray extends StatelessWidget {
 /// rises and enlarges, as if being lifted from the row. Tap any spine to open.
 class _SpineCarousel extends StatefulWidget {
   final List<CassetteTape> tapes;
-  final void Function(CassetteTape tape) onTapeTap;
+  final void Function(List<CassetteTape> queue, int index) onTapeTap;
 
   const _SpineCarousel({required this.tapes, required this.onTapeTap});
 
@@ -415,7 +415,7 @@ class _SpineCarouselState extends State<_SpineCarousel> {
                     width: _itemW,
                     child: CassetteSpine(
                       tape: tape,
-                      onTap: () => widget.onTapeTap(tape),
+                      onTap: () => widget.onTapeTap(widget.tapes, i),
                     ),
                   ),
                 ),

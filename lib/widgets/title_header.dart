@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/cassette_tape.dart';
+import '../services/palette_service.dart';
 import '../utils/colors.dart';
 
 /// Marquee-scrolling title bar styled as a cassette J-card spine
@@ -26,6 +27,7 @@ class _VintageTitleHeaderState extends State<VintageTitleHeader>
 
   String? _lastText;
   late TextPainter _text;
+  late Color _stripe = widget.tape.stripeColor;
   late final TextPainter _sideA = TextPainter(
     text: const TextSpan(
       text: 'A',
@@ -79,6 +81,19 @@ class _VintageTitleHeaderState extends State<VintageTitleHeader>
     super.initState();
     _syncText();
     _syncMarquee();
+    _resolveStripe();
+  }
+
+  void _resolveStripe() {
+    final url = widget.tape.albumArtUrl;
+    final cached = PaletteService.cached(url);
+    if (cached != null) {
+      _stripe = cached.stripe;
+    } else if (url != null && url.isNotEmpty) {
+      PaletteService.resolve(url).then((c) {
+        if (mounted && c != null) setState(() => _stripe = c.stripe);
+      });
+    }
   }
 
   @override
@@ -113,7 +128,7 @@ class _VintageTitleHeaderState extends State<VintageTitleHeader>
         borderRadius: BorderRadius.circular(2),
         child: CustomPaint(
           painter: _HeaderPainter(
-            stripeColor: widget.tape.stripeColor,
+            stripeColor: _stripe,
             text: _text,
             sideA: _sideA,
             playing: widget.tapeState == TapeState.playing,
