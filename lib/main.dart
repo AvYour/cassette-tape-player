@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'services/spotify_service.dart';
-import 'screens/library_screen.dart';
+import 'screens/cabinet_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +50,6 @@ class _AppRootState extends State<_AppRoot> {
 
   @override
   Widget build(BuildContext context) {
-    return LibraryScreen(spotifyService: _spotifyService);
+    return CabinetScreen(spotifyService: _spotifyService);
   }
 }

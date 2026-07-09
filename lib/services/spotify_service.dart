@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:spotify_sdk/spotify_sdk.dart';
 import 'package:spotify_sdk/models/player_state.dart';
 import '../models/cassette_tape.dart';
+import '../models/playlist.dart';
 import 'spotify_auth.dart';
 
 class SpotifyService extends ChangeNotifier {
   bool _isConnected = false;
   bool _isLoading = false;
   final List<CassetteTape> _tapes = CassetteTape.demoTapes;
+  List<Playlist> _playlists = [];
   PlayerState? _playerState;
 
   // --- Demo playback simulation (used when not connected to Spotify) ---
@@ -21,6 +25,7 @@ class SpotifyService extends ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isLoading => _isLoading;
   List<CassetteTape> get tapes => _tapes;
+  List<Playlist> get playlists => _playlists;
   PlayerState? get playerState => _playerState;
   bool get isDemoMode => !_isConnected;
 
@@ -45,6 +50,7 @@ class SpotifyService extends ChangeNotifier {
     _isConnected = await SpotifyAuth.connect();
     if (_isConnected) {
       _subscribeToPlayerState();
+      await fetchPlaylists();
     }
 
     _isLoading = false;
@@ -56,6 +62,92 @@ class SpotifyService extends ChangeNotifier {
       _playerState = state;
       notifyListeners();
     });
+  }
+
+  // --- Spotify Web API -----------------------------------------------------
+
+  Map<String, String> get _authHeader =>
+      {'Authorization': 'Bearer ${SpotifyAuth.accessToken}'};
+
+  /// Loads the user's playlists into drawers (metadata only; tracks load lazily).
+  Future<void> fetchPlaylists() async {
+    final token = SpotifyAuth.accessToken;
+    if (token == null) return;
+    try {
+      final res = await http.get(
+        Uri.parse('https://api.spotify.com/v1/me/playlists?limit=50'),
+        headers: _authHeader,
+      );
+      if (res.statusCode != 200) return;
+      final items = (json.decode(res.body)['items'] as List?)
+              ?.cast<Map<String, dynamic>>() ??
+          [];
+      _playlists = items
+          .asMap()
+          .entries
+          .map((e) => Playlist.fromJson(e.value, e.key))
+          .toList();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Loads the tracks of a playlist as cassettes, caching them on the model.
+  Future<void> loadPlaylistTracks(Playlist playlist) async {
+    if (playlist.tapes != null || playlist.loading) return;
+    final token = SpotifyAuth.accessToken;
+    if (token == null) return;
+    playlist.loading = true;
+    notifyListeners();
+    try {
+      final res = await http.get(
+        Uri.parse(
+            'https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50'),
+        headers: _authHeader,
+      );
+      if (res.statusCode == 200) {
+        final items = (json.decode(res.body)['items'] as List?)
+                ?.cast<Map<String, dynamic>>() ??
+            [];
+        final tapes = <CassetteTape>[];
+        for (final item in items) {
+          final track = item['track'];
+          if (track is Map<String, dynamic> && track['id'] != null) {
+            tapes.add(CassetteTape.fromSpotifyTrack(track, tapes.length));
+          }
+        }
+        playlist.tapes = tapes;
+      } else {
+        playlist.tapes = [];
+      }
+    } catch (_) {
+      playlist.tapes = [];
+    }
+    playlist.loading = false;
+    notifyListeners();
+  }
+
+  /// Searches Spotify's catalogue for tracks matching [query].
+  Future<List<CassetteTape>> searchTracks(String query) async {
+    final token = SpotifyAuth.accessToken;
+    if (token == null || query.trim().isEmpty) return [];
+    try {
+      final res = await http.get(
+        Uri.parse(
+            'https://api.spotify.com/v1/search?type=track&limit=20&q=${Uri.encodeQueryComponent(query)}'),
+        headers: _authHeader,
+      );
+      if (res.statusCode != 200) return [];
+      final items = (json.decode(res.body)['tracks']?['items'] as List?)
+              ?.cast<Map<String, dynamic>>() ??
+          [];
+      return items
+          .asMap()
+          .entries
+          .map((e) => CassetteTape.fromSpotifyTrack(e.value, e.key))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   /// Start playing a tape. Plays the real track through Spotify when connected
