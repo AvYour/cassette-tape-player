@@ -35,7 +35,12 @@ class CabinetDrawer extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Column(
         children: [
-          _DrawerFace(playlist: playlist, isOpen: isOpen, onTap: onTap),
+          _DrawerFace(
+            playlist: playlist,
+            isOpen: isOpen,
+            onTap: onTap,
+            loadedCount: tapes?.length,
+          ),
           AnimatedSize(
             duration: const Duration(milliseconds: 320),
             curve: Curves.easeOutCubic,
@@ -58,12 +63,20 @@ class _DrawerFace extends StatelessWidget {
   final Playlist playlist;
   final bool isOpen;
   final VoidCallback onTap;
+  final int? loadedCount;
 
   const _DrawerFace({
     required this.playlist,
     required this.isOpen,
     required this.onTap,
+    this.loadedCount,
   });
+
+  String get _subtitle {
+    final count = loadedCount ?? (playlist.trackCount > 0 ? playlist.trackCount : null);
+    final prefix = count != null ? '$count tapes · ' : '';
+    return '$prefix${playlist.owner}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +150,7 @@ class _DrawerFace extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${playlist.trackCount} tapes · ${playlist.owner}',
+                          _subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.robotoMono(
@@ -323,16 +336,78 @@ class _DrawerTray extends StatelessWidget {
         ),
       );
     }
-    // Tapes stand filed on their edge, showing only their labelled spine.
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      itemCount: list.length,
+    // Filed tapes in a coverflow: the centred one lifts out of the drawer.
+    return _SpineCarousel(tapes: list, onTapeTap: onTapeTap);
+  }
+}
+
+/// Horizontal coverflow of cassette spines. The spine nearest the centre
+/// rises and enlarges (as if pulled up from the drawer); swiping brings the
+/// next tape forward. Tap the raised spine to open it.
+class _SpineCarousel extends StatefulWidget {
+  final List<CassetteTape> tapes;
+  final void Function(CassetteTape tape) onTapeTap;
+
+  const _SpineCarousel({required this.tapes, required this.onTapeTap});
+
+  @override
+  State<_SpineCarousel> createState() => _SpineCarouselState();
+}
+
+class _SpineCarouselState extends State<_SpineCarousel> {
+  late final PageController _controller =
+      PageController(viewportFraction: 0.26);
+  double _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      setState(() => _page = _controller.page ?? 0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PageView.builder(
+      controller: _controller,
+      itemCount: widget.tapes.length,
+      clipBehavior: Clip.none,
       itemBuilder: (context, i) {
-        final tape = list[i];
-        return Padding(
-          padding: const EdgeInsets.only(right: 10),
-          child: CassetteSpine(tape: tape, onTap: () => onTapeTap(tape)),
+        final distance = (_page - i).abs().clamp(0.0, 1.0);
+        final scale = 1.18 - 0.34 * distance; // focused biggest
+        final lift = (1 - distance) * 20; // focused rises out
+        final tape = widget.tapes[i];
+        return Center(
+          child: Transform.translate(
+            offset: Offset(0, -lift),
+            child: Transform.scale(
+              scale: scale,
+              child: Opacity(
+                opacity: 1 - 0.35 * distance,
+                child: CassetteSpine(
+                  tape: tape,
+                  onTap: () {
+                    if ((_page - i).abs() < 0.5) {
+                      widget.onTapeTap(tape);
+                    } else {
+                      _controller.animateToPage(
+                        i,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOutCubic,
+                      );
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
         );
       },
     );

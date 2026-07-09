@@ -53,10 +53,14 @@ class _PlayerScreenState extends State<PlayerScreen>
   Duration _last = Duration.zero;
   bool _audioStarted = false;
 
+  // Estimated playback position (ms). Snapped to Spotify events and
+  // interpolated by elapsed time between them so lyrics scroll smoothly.
+  double _positionMs = 0;
+  int _lastEventPos = -1;
+
   // Lyrics: liner notes by default, replaced by lrclib results when found.
   late List<String> _lyrics = widget.tape.lyrics;
   List<int>? _lyricTimesMs; // set when synced lyrics are available
-  double _demoLyric = 0; // local scroll position for demo/unsynced playback
 
   @override
   void initState() {
@@ -102,17 +106,20 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!svc.isConnected) return;
     switch (state) {
       case TapeState.playing:
-        if (_audioStarted) {
-          svc.resume();
-        } else {
+        if (!_audioStarted) {
           _audioStarted = true;
           svc.playTape(widget.tape);
+        } else {
+          // Resume at the (possibly scrubbed) position.
+          svc.seekTo(_positionMs.round());
+          svc.resume();
         }
       case TapeState.stopped:
         svc.pause();
       case TapeState.ff:
       case TapeState.rew:
-        break;
+        // Silence the audio while winding; PLAY reseeks to the new spot.
+        svc.pause();
     }
   }
 
@@ -144,41 +151,62 @@ class _PlayerScreenState extends State<PlayerScreen>
       _right += _rightSpeed * frameDelta;
       _left += _leftSpeed * frameDelta;
       _angles.update(_left, _right);
-      _updateLyricProgress(dt);
     }
+
+    _updatePosition(dt);
+    _updateLyricProgress();
   }
 
-  /// Advances the lyric reel. Never stops playback — the song plays until the
-  /// track ends or the user stops it.
-  void _updateLyricProgress(double dt) {
+  /// Keeps [_positionMs] in step with playback: snap to Spotify events (which
+  /// only arrive on changes), interpolate by time while playing, and scrub on
+  /// FF/REW.
+  void _updatePosition(double dt) {
+    final svc = widget.spotifyService;
+    final dur = widget.tape.durationMs.toDouble();
+
+    if (svc.isConnected && _tapeState == TapeState.playing) {
+      final st = svc.playerState;
+      if (st != null && st.playbackPosition != _lastEventPos) {
+        _positionMs = st.playbackPosition.toDouble();
+        _lastEventPos = st.playbackPosition;
+      }
+    }
+
+    switch (_tapeState) {
+      case TapeState.playing:
+        _positionMs += dt * 1000;
+      case TapeState.ff:
+        _positionMs += dt * 1000 * 8;
+      case TapeState.rew:
+        _positionMs -= dt * 1000 * 8;
+      case TapeState.stopped:
+        break;
+    }
+    _positionMs = _positionMs.clamp(0.0, dur);
+  }
+
+  /// Places the lyric reel from [_positionMs] (synced or proportional).
+  void _updateLyricProgress() {
     final lineCount = _lyrics.length;
     if (lineCount == 0) return;
     final maxProgress = (lineCount - 1).toDouble();
-    final svc = widget.spotifyService;
     final times = _lyricTimesMs;
 
-    if (svc.isConnected && times != null && times.length == lineCount) {
-      // Synced lyrics: place the reel by the real playback position.
-      final posMs = svc.trackProgress * widget.tape.durationMs;
+    if (times != null && times.length == lineCount) {
       int i = 0;
-      while (i < times.length - 1 && times[i + 1] <= posMs) {
+      while (i < times.length - 1 && times[i + 1] <= _positionMs) {
         i++;
       }
       double frac = 0;
       if (i < times.length - 1) {
         final span = times[i + 1] - times[i];
-        if (span > 0) frac = ((posMs - times[i]) / span).clamp(0.0, 1.0);
+        if (span > 0) frac = ((_positionMs - times[i]) / span).clamp(0.0, 1.0);
       }
       _lyricProgress.value = (i + frac).clamp(0.0, maxProgress);
-    } else if (svc.isConnected) {
-      // Unsynced: scroll proportionally to the track position.
-      _lyricProgress.value = (svc.trackProgress * maxProgress).clamp(0.0, maxProgress);
     } else {
-      // Demo: drift locally, wrapping so it never dead-ends or stops the reels.
-      _demoLyric += _speedMul * 0.25 * dt;
-      if (_demoLyric > maxProgress) _demoLyric = 0;
-      if (_demoLyric < 0) _demoLyric = maxProgress;
-      _lyricProgress.value = _demoLyric;
+      final dur = widget.tape.durationMs.toDouble();
+      final ratio = dur > 0 ? _positionMs / dur : 0.0;
+      _lyricProgress.value = (ratio * maxProgress).clamp(0.0, maxProgress);
     }
   }
 
