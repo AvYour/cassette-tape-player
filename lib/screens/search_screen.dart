@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
+import '../widgets/mini_player_bar.dart';
 import '../widgets/vintage_background.dart';
 import 'player_screen.dart';
 
@@ -89,6 +90,7 @@ class _SearchScreenState extends State<SearchScreen> {
             children: [
               _buildSearchBar(),
               Expanded(child: _buildBody()),
+              MiniPlayerBar(service: svc),
             ],
           ),
         ),

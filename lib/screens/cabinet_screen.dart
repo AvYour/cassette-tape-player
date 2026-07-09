@@ -5,6 +5,7 @@ import '../models/playlist.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../widgets/cabinet_drawer.dart';
+import '../widgets/mini_player_bar.dart';
 import '../widgets/vintage_background.dart';
 import 'player_screen.dart';
 import 'search_screen.dart';
@@ -95,6 +96,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
                       ],
                     ),
                   ),
+                  MiniPlayerBar(service: svc),
                 ],
               );
             },

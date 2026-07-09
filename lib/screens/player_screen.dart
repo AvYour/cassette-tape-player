@@ -81,6 +81,23 @@ class _PlayerScreenState extends State<PlayerScreen>
     WidgetsBinding.instance.addObserver(this);
     _ticker = createTicker(_tick)..start();
     _fetchLyrics();
+
+    // Reopened (e.g. from the mini-player) while this tape is already playing:
+    // resume the visuals in sync instead of starting from stopped.
+    final svc = widget.spotifyService;
+    if (svc.isConnected && svc.nowPlaying?.id == _tape.id && svc.isPlaying) {
+      _tapeState = TapeState.playing;
+      _audioStarted = true;
+      svc.fetchPositionMs().then((ms) {
+        if (ms != null && mounted) {
+          _positionMs = ms.toDouble();
+          _lastEventPos = ms;
+        }
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.spotifyService.setNowPlaying(widget.queue, _index);
+    });
   }
 
   @override
@@ -127,6 +144,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _lyricProgress.value = 0;
     _audioStarted = true;
     widget.spotifyService.playTape(_tape);
+    widget.spotifyService.setNowPlaying(widget.queue, _index);
     _fetchLyrics();
   }
 
@@ -186,6 +204,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         if (!_audioStarted) {
           _audioStarted = true;
           svc.playTape(_tape);
+          svc.setNowPlaying(widget.queue, _index);
         } else {
           // Resume at the (possibly scrubbed) position.
           svc.seekTo(_positionMs.round());
@@ -201,8 +220,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   void _eject() {
-    // Stop playback (and the demo sim) before leaving the player.
+    // Eject stops playback for good and clears the mini-player.
     widget.spotifyService.pause();
+    widget.spotifyService.clearNowPlaying();
     Navigator.of(context).maybePop();
   }
 

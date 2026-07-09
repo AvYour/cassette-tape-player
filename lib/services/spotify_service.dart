@@ -25,6 +25,30 @@ class SpotifyService extends ChangeNotifier {
   String? _statusMessage;
   String? _searchError;
 
+  // The tape currently loaded for playback, plus its queue, so a mini-player
+  // bar can persist after the full player screen is dismissed with Back.
+  CassetteTape? _nowPlaying;
+  List<CassetteTape> _nowQueue = const [];
+  int _nowIndex = 0;
+
+  CassetteTape? get nowPlaying => _nowPlaying;
+  List<CassetteTape> get nowQueue => _nowQueue;
+  int get nowIndex => _nowIndex;
+
+  void setNowPlaying(List<CassetteTape> queue, int index) {
+    _nowQueue = queue;
+    _nowIndex = index;
+    _nowPlaying = (index >= 0 && index < queue.length) ? queue[index] : null;
+    notifyListeners();
+  }
+
+  /// Clears the mini-player (used when the tape is ejected/stopped for good).
+  void clearNowPlaying() {
+    _nowPlaying = null;
+    _nowQueue = const [];
+    notifyListeners();
+  }
+
   bool get isConnected => _isConnected;
   bool get isLoading => _isLoading;
   List<CassetteTape> get tapes => _tapes;
