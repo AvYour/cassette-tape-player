@@ -41,6 +41,12 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
   }
 
   @override
+  void dispose() {
+    _drift.dispose();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(DynamicMusicBackground old) {
     super.didUpdateWidget(old);
     if (old.tape.id != widget.tape.id) _resolveSwatches();
