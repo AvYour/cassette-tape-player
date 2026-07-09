@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
+import '../painters/cassette_tape_painter.dart';
 import '../utils/colors.dart';
 import 'cassette_tape_view.dart';
 
@@ -14,6 +15,7 @@ class CabinetDrawer extends StatelessWidget {
   final VoidCallback onTap;
   final bool loading;
   final List<CassetteTape>? tapes;
+  final String? loadError;
   final void Function(CassetteTape tape) onTapeTap;
 
   const CabinetDrawer({
@@ -23,6 +25,7 @@ class CabinetDrawer extends StatelessWidget {
     required this.onTap,
     required this.loading,
     required this.tapes,
+    this.loadError,
     required this.onTapeTap,
   });
 
@@ -40,6 +43,7 @@ class CabinetDrawer extends StatelessWidget {
                 ? _DrawerTray(
                     loading: loading,
                     tapes: tapes,
+                    loadError: loadError,
                     onTapeTap: onTapeTap,
                   )
                 : const SizedBox(width: double.infinity, height: 0),
@@ -182,11 +186,13 @@ class _DrawerFace extends StatelessWidget {
 class _DrawerTray extends StatelessWidget {
   final bool loading;
   final List<CassetteTape>? tapes;
+  final String? loadError;
   final void Function(CassetteTape tape) onTapeTap;
 
   const _DrawerTray({
     required this.loading,
     required this.tapes,
+    required this.loadError,
     required this.onTapeTap,
   });
 
@@ -221,15 +227,24 @@ class _DrawerTray extends StatelessWidget {
     final list = tapes ?? const [];
     if (list.isEmpty) {
       return Center(
-        child: Text(
-          'Empty drawer',
-          style: GoogleFonts.robotoMono(
-            fontSize: 12,
-            color: const Color(0xFFF4EFE6).withValues(alpha: 0.5),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            loadError ?? 'Empty drawer',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.robotoMono(
+              fontSize: 11,
+              height: 1.4,
+              color: const Color(0xFFF4EFE6).withValues(alpha: 0.6),
+            ),
           ),
         ),
       );
     }
+    // Upright cassette: portrait footprint derived from the tray height.
+    const trayHeight = 210.0;
+    const uprightHeight = trayHeight - 40; // vertical padding
+    const uprightWidth = uprightHeight / kCassetteAspect;
     return ListView.builder(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -240,13 +255,14 @@ class _DrawerTray extends StatelessWidget {
           padding: const EdgeInsets.only(right: 14),
           child: GestureDetector(
             onTap: () => onTapeTap(tape),
-            child: Hero(
-              tag: 'tape_${tape.id}',
-              flightShuttleBuilder: cassetteFlightShuttle(tape),
-              child: RotatedBox(
-                quarterTurns: 3,
-                child: SizedBox(
-                  height: 150,
+            child: SizedBox(
+              width: uprightWidth,
+              height: uprightHeight,
+              child: Hero(
+                tag: 'tape_${tape.id}',
+                flightShuttleBuilder: cassetteFlightShuttle(tape),
+                child: RotatedBox(
+                  quarterTurns: 3,
                   child: CassetteTapeView(tape: tape),
                 ),
               ),

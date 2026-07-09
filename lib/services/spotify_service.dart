@@ -119,32 +119,44 @@ class SpotifyService extends ChangeNotifier {
   Future<void> loadPlaylistTracks(Playlist playlist) async {
     if (playlist.tapes != null || playlist.loading) return;
     final token = SpotifyAuth.accessToken;
-    if (token == null) return;
+    if (token == null) {
+      playlist.tapes = [];
+      playlist.loadError = 'No Web API token';
+      notifyListeners();
+      return;
+    }
     playlist.loading = true;
+    playlist.loadError = null;
     notifyListeners();
     try {
       final res = await http.get(
         Uri.parse(
-            'https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50'),
+            'https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50&market=from_token'),
         headers: _authHeader,
       );
       if (res.statusCode == 200) {
-        final items = (json.decode(res.body)['items'] as List?)
-                ?.cast<Map<String, dynamic>>() ??
-            [];
+        final items = (json.decode(res.body)['items'] as List?) ?? [];
         final tapes = <CassetteTape>[];
         for (final item in items) {
+          if (item is! Map) continue;
           final track = item['track'];
           if (track is Map<String, dynamic> && track['id'] != null) {
-            tapes.add(CassetteTape.fromSpotifyTrack(track, tapes.length));
+            try {
+              tapes.add(CassetteTape.fromSpotifyTrack(track, tapes.length));
+            } catch (_) {}
           }
         }
         playlist.tapes = tapes;
+        if (tapes.isEmpty) {
+          playlist.loadError = 'Loaded 0 playable tracks (${items.length} items)';
+        }
       } else {
         playlist.tapes = [];
+        playlist.loadError = 'HTTP ${res.statusCode}';
       }
-    } catch (_) {
+    } catch (e) {
       playlist.tapes = [];
+      playlist.loadError = 'Error: $e';
     }
     playlist.loading = false;
     notifyListeners();

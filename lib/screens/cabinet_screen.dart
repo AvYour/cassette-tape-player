@@ -80,6 +80,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
                             onTap: () => _toggle(pl.id, playlist: pl),
                             loading: pl.loading,
                             tapes: pl.tapes,
+                            loadError: pl.loadError,
                             onTapeTap: _openPlayer,
                           ),
                         if (svc.statusMessage != null) _buildStatus(svc.statusMessage!),

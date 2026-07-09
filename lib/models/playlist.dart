@@ -13,6 +13,7 @@ class Playlist {
 
   List<CassetteTape>? tapes; // null until loaded
   bool loading = false;
+  String? loadError; // set when a load returns no usable tapes
 
   Playlist({
     required this.id,
