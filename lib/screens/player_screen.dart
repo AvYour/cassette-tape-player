@@ -97,17 +97,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
   }
 
-  /// When the track ends, roll on to the next tape in the queue and keep
-  /// playing — like flipping to the next song on a mixtape.
-  void _advanceToNext() {
-    if (_advancing) return;
-    if (_index + 1 >= widget.queue.length) {
-      _setTapeState(TapeState.stopped);
-      return;
-    }
-    _advancing = true;
+  /// Loads and starts playing the tape at [i], resetting all playback state.
+  void _goToIndex(int i) {
+    if (i < 0 || i >= widget.queue.length) return;
     setState(() {
-      _index++;
+      _index = i;
       _lyrics = _tape.lyrics;
       _lyricTimesMs = null;
       _tapeState = TapeState.playing;
@@ -119,10 +113,36 @@ class _PlayerScreenState extends State<PlayerScreen>
     _audioStarted = true;
     widget.spotifyService.playTape(_tape);
     _fetchLyrics();
-    // Release the guard once playback of the new track has begun.
+  }
+
+  /// When the track ends, roll on to the next tape and keep playing — like
+  /// flipping to the next song on a mixtape.
+  void _advanceToNext() {
+    if (_advancing) return;
+    if (_index + 1 >= widget.queue.length) {
+      _setTapeState(TapeState.stopped);
+      return;
+    }
+    _advancing = true;
+    _goToIndex(_index + 1);
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) _advancing = false;
     });
+  }
+
+  void _skipNext() {
+    if (_index + 1 < widget.queue.length) _goToIndex(_index + 1);
+  }
+
+  /// Restart the current tape if we're past the intro, otherwise go back one.
+  void _skipPrevious() {
+    if (_positionMs > 3000 || _index == 0) {
+      _positionMs = 0;
+      _lyricProgress.value = 0;
+      if (widget.spotifyService.isConnected) widget.spotifyService.seekTo(0);
+    } else {
+      _goToIndex(_index - 1);
+    }
   }
 
   @override
@@ -387,7 +407,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     },
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
                 Text(
                   'COMPONENT PANEL',
                   style: GoogleFonts.robotoMono(
@@ -400,6 +420,13 @@ class _PlayerScreenState extends State<PlayerScreen>
                 const SizedBox(height: 8),
                 Row(
                   children: [
+                    Expanded(
+                      child: SkeuoButton(
+                        icon: RetroIcon.prev,
+                        onPressed: _skipPrevious,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: SkeuoButton(
                         icon: RetroIcon.rec,
@@ -437,6 +464,14 @@ class _PlayerScreenState extends State<PlayerScreen>
                       child: SkeuoButton(
                         icon: RetroIcon.stop,
                         onPressed: () => _setTapeState(TapeState.stopped),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: SkeuoButton(
+                        icon: RetroIcon.next,
+                        enabled: _index + 1 < widget.queue.length,
+                        onPressed: _skipNext,
                       ),
                     ),
                   ],
@@ -506,3 +541,4 @@ class _BackingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_BackingPainter old) => false;
 }
+
