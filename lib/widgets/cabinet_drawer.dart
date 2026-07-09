@@ -298,7 +298,7 @@ class _DrawerTray extends StatelessWidget {
       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
       child: Container(
         width: double.infinity,
-        height: 220,
+        height: 256,
         decoration: const BoxDecoration(
           // Recessed inside-of-drawer look.
           gradient: LinearGradient(

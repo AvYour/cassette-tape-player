@@ -124,7 +124,7 @@ class CassetteSpine extends StatelessWidget {
       child: RotatedBox(
         quarterTurns: 3,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           // FittedBox shrinks the text to fit the spine so the full title and
           // artist stay readable — no "..." truncation.
           child: Row(
@@ -139,14 +139,14 @@ class CassetteSpine extends StatelessWidget {
                     maxLines: 1,
                     softWrap: false,
                     style: GoogleFonts.specialElite(
-                      fontSize: 11,
+                      fontSize: 13,
                       color: kTextDark,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Flexible(
                 flex: 2,
                 child: FittedBox(
@@ -157,8 +157,8 @@ class CassetteSpine extends StatelessWidget {
                     maxLines: 1,
                     softWrap: false,
                     style: GoogleFonts.courierPrime(
-                      fontSize: 9,
-                      color: kTextDark.withValues(alpha: 0.6),
+                      fontSize: 11,
+                      color: kTextDark.withValues(alpha: 0.62),
                     ),
                   ),
                 ),
