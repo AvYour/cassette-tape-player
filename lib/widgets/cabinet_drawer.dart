@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
@@ -94,18 +95,14 @@ class _DrawerFace extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            // Top edge highlight for a bevelled wooden look.
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 2,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(10)),
+            // Wood grain + bevel.
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.vertical(
+                  top: const Radius.circular(10),
+                  bottom: Radius.circular(isOpen ? 2 : 10),
                 ),
+                child: CustomPaint(painter: _WoodGrainPainter()),
               ),
             ),
             Padding(
@@ -152,26 +149,8 @@ class _DrawerFace extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Metal drawer handle.
-                  Container(
-                    width: 54,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      gradient: const LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0xFFECECEC), Color(0xFF9A9A9A)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.4),
-                          blurRadius: 3,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // Recessed metal cup handle with mounting screws.
+                  _CupHandle(open: isOpen),
                 ],
               ),
             ),
@@ -180,6 +159,110 @@ class _DrawerFace extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A recessed drawer cup handle: dark inset well, brushed-metal bar, two screws.
+class _CupHandle extends StatelessWidget {
+  final bool open;
+
+  const _CupHandle({required this.open});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 58,
+      height: 34,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1C1206), Color(0xFF3A2716)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.08),
+            blurRadius: 1,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Brushed metal grip bar.
+          Container(
+            width: 44,
+            height: 12,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFF2F2F2),
+                  Color(0xFFBDBDBD),
+                  Color(0xFF8A8A8A),
+                ],
+                stops: [0.0, 0.55, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 2,
+                  offset: Offset(0, open ? 1 : 2),
+                ),
+              ],
+            ),
+          ),
+          Positioned(left: 4, child: _screw()),
+          Positioned(right: 4, child: _screw()),
+        ],
+      ),
+    );
+  }
+
+  Widget _screw() => Container(
+        width: 5,
+        height: 5,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [Color(0xFFCFCFCF), Color(0xFF5A5A5A)],
+          ),
+        ),
+      );
+}
+
+/// Paints warm wood tones with faint horizontal grain and a top bevel.
+class _WoodGrainPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rnd = math.Random(7);
+    final grain = Paint()
+      ..strokeWidth = 1
+      ..color = Colors.black.withValues(alpha: 0.05);
+    for (double y = 4; y < size.height; y += 5) {
+      final wobble = (rnd.nextDouble() - 0.5) * 3;
+      final path = Path()
+        ..moveTo(0, y)
+        ..quadraticBezierTo(
+            size.width / 2, y + wobble, size.width, y + wobble * 0.4);
+      canvas.drawPath(path, grain);
+    }
+    // Top bevel highlight and bottom shade.
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, 2),
+      Paint()..color = Colors.white.withValues(alpha: 0.14),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(0, size.height - 3, size.width, 3),
+      Paint()..color = Colors.black.withValues(alpha: 0.2),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_WoodGrainPainter old) => false;
 }
 
 class _DrawerTray extends StatelessWidget {

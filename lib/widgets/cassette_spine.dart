@@ -123,11 +123,13 @@ class CassetteSpine extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           child: Row(
             children: [
-              Expanded(
+              Flexible(
+                flex: 3,
                 child: Text(
                   tape.trackName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  softWrap: false,
                   style: GoogleFonts.specialElite(
                     fontSize: 11,
                     color: kTextDark,
@@ -136,13 +138,17 @@ class CassetteSpine extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                tape.artistName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.courierPrime(
-                  fontSize: 9,
-                  color: kTextDark.withValues(alpha: 0.6),
+              Flexible(
+                flex: 2,
+                child: Text(
+                  tape.artistName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: GoogleFonts.courierPrime(
+                    fontSize: 9,
+                    color: kTextDark.withValues(alpha: 0.6),
+                  ),
                 ),
               ),
             ],

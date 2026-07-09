@@ -4,12 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
-import '../widgets/cassette_tape_view.dart';
 import '../widgets/vintage_background.dart';
 import 'player_screen.dart';
 
 /// Live Spotify track search. Type a song or artist; matching tracks appear as
-/// upright cassettes. Tapping one opens the player and (when connected) plays
+/// rows with cover art, title and artist. Tapping one opens the player and plays
 /// it. Requires a Spotify connection for results.
 class SearchScreen extends StatefulWidget {
   final SpotifyService spotifyService;
@@ -181,29 +180,14 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_results.isEmpty) {
       return _hint(svc.searchError ?? 'No tapes found for "$_lastQuery".');
     }
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.62,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 20,
-      ),
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       itemCount: _results.length,
-      itemBuilder: (context, i) {
-        final tape = _results[i];
-        return GestureDetector(
-          onTap: () => _openPlayer(tape),
-          child: Hero(
-            tag: 'tape_${tape.id}',
-            flightShuttleBuilder: cassetteFlightShuttle(tape),
-            child: RotatedBox(
-              quarterTurns: 3,
-              child: CassetteTapeView(tape: tape),
-            ),
-          ),
-        );
-      },
+      separatorBuilder: (_, __) => const SizedBox(height: 6),
+      itemBuilder: (context, i) => _ResultRow(
+        tape: _results[i],
+        onTap: () => _openPlayer(_results[i]),
+      ),
     );
   }
 
@@ -223,4 +207,87 @@ class _SearchScreenState extends State<SearchScreen> {
       ),
     );
   }
+}
+
+class _ResultRow extends StatelessWidget {
+  final CassetteTape tape;
+  final VoidCallback onTap;
+
+  const _ResultRow({required this.tape, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final art = tape.albumArtUrl;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4EFE6).withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: art != null && art.isNotEmpty
+                    ? Image.network(art, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _placeholder())
+                    : _placeholder(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    tape.trackName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.specialElite(
+                      fontSize: 14,
+                      color: kTextDark,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    tape.artistName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.courierPrime(
+                      fontSize: 12,
+                      color: kTextDark.withValues(alpha: 0.75),
+                    ),
+                  ),
+                  if (tape.albumName.isNotEmpty)
+                    Text(
+                      '${tape.albumName}${tape.year.isNotEmpty ? '  ·  ${tape.year}' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.courierPrime(
+                        fontSize: 10,
+                        color: kVintageInk,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.play_circle_outline, color: kTextDark.withValues(alpha: 0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: const Color(0xFF161616),
+        child: const Icon(Icons.music_note, color: kMark, size: 22),
+      );
 }

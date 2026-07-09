@@ -8,6 +8,7 @@ class Playlist {
   final String id;
   final String name;
   final String owner;
+  final String ownerId;
   final int trackCount;
   final Color accent;
 
@@ -19,6 +20,7 @@ class Playlist {
     required this.id,
     required this.name,
     required this.owner,
+    required this.ownerId,
     required this.trackCount,
     required this.accent,
   });
@@ -30,6 +32,7 @@ class Playlist {
       id: json['id'] as String? ?? 'pl_$index',
       name: json['name'] as String? ?? 'Untitled',
       owner: owner['display_name'] as String? ?? 'Spotify',
+      ownerId: owner['id'] as String? ?? '',
       trackCount: (tracks['total'] as int?) ?? 0,
       accent: kTapePalette[index % kTapePalette.length].stripe,
     );

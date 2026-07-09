@@ -212,6 +212,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
     id: 'demo',
     name: 'Starter Mixtape',
     owner: 'You',
+    ownerId: 'demo',
     trackCount: CassetteTape.demoTapes.length,
     accent: const Color(0xFFD94532),
   );

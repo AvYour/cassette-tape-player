@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../painters/cassette_tape_painter.dart';
+import '../services/lyrics_service.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../widgets/cassette_tape_view.dart';
@@ -52,10 +53,31 @@ class _PlayerScreenState extends State<PlayerScreen>
   Duration _last = Duration.zero;
   bool _audioStarted = false;
 
+  // Lyrics: liner notes by default, replaced by lrclib results when found.
+  late List<String> _lyrics = widget.tape.lyrics;
+  List<int>? _lyricTimesMs; // set when synced lyrics are available
+  double _demoLyric = 0; // local scroll position for demo/unsynced playback
+
   @override
   void initState() {
     super.initState();
     _ticker = createTicker(_tick)..start();
+    _fetchLyrics();
+  }
+
+  Future<void> _fetchLyrics() async {
+    final t = widget.tape;
+    final lyrics = await LyricsService.fetch(
+      track: t.trackName,
+      artist: t.artistName,
+      album: t.albumName,
+      durationMs: t.durationMs,
+    );
+    if (!mounted || lyrics == null || lyrics.isEmpty) return;
+    setState(() {
+      _lyrics = lyrics.lines;
+      _lyricTimesMs = lyrics.timesMs;
+    });
   }
 
   @override
@@ -122,20 +144,41 @@ class _PlayerScreenState extends State<PlayerScreen>
       _right += _rightSpeed * frameDelta;
       _left += _leftSpeed * frameDelta;
       _angles.update(_left, _right);
+      _updateLyricProgress(dt);
+    }
+  }
 
-      final maxProgress =
-          (widget.tape.lyrics.length - 1).clamp(0, 1 << 30).toDouble();
-      final next = _lyricProgress.value + _speedMul * 0.25 * dt;
-      if (next >= maxProgress &&
-          (_tapeState == TapeState.playing || _tapeState == TapeState.ff)) {
-        _lyricProgress.value = maxProgress;
-        _setTapeState(TapeState.stopped);
-      } else if (next <= 0 && _tapeState == TapeState.rew) {
-        _lyricProgress.value = 0;
-        _setTapeState(TapeState.stopped);
-      } else {
-        _lyricProgress.value = next.clamp(0.0, maxProgress);
+  /// Advances the lyric reel. Never stops playback — the song plays until the
+  /// track ends or the user stops it.
+  void _updateLyricProgress(double dt) {
+    final lineCount = _lyrics.length;
+    if (lineCount == 0) return;
+    final maxProgress = (lineCount - 1).toDouble();
+    final svc = widget.spotifyService;
+    final times = _lyricTimesMs;
+
+    if (svc.isConnected && times != null && times.length == lineCount) {
+      // Synced lyrics: place the reel by the real playback position.
+      final posMs = svc.trackProgress * widget.tape.durationMs;
+      int i = 0;
+      while (i < times.length - 1 && times[i + 1] <= posMs) {
+        i++;
       }
+      double frac = 0;
+      if (i < times.length - 1) {
+        final span = times[i + 1] - times[i];
+        if (span > 0) frac = ((posMs - times[i]) / span).clamp(0.0, 1.0);
+      }
+      _lyricProgress.value = (i + frac).clamp(0.0, maxProgress);
+    } else if (svc.isConnected) {
+      // Unsynced: scroll proportionally to the track position.
+      _lyricProgress.value = (svc.trackProgress * maxProgress).clamp(0.0, maxProgress);
+    } else {
+      // Demo: drift locally, wrapping so it never dead-ends or stops the reels.
+      _demoLyric += _speedMul * 0.25 * dt;
+      if (_demoLyric > maxProgress) _demoLyric = 0;
+      if (_demoLyric < 0) _demoLyric = maxProgress;
+      _lyricProgress.value = _demoLyric;
     }
   }
 
@@ -201,7 +244,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                   child: FractionallySizedBox(
                     widthFactor: 0.88,
                     child: VintageLyrics(
-                      lyrics: widget.tape.lyrics,
+                      lyrics: _lyrics,
                       progress: _lyricProgress,
                     ),
                   ),

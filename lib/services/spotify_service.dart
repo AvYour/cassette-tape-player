@@ -106,11 +106,28 @@ class SpotifyService extends ChangeNotifier {
   Map<String, String> get _authHeader =>
       {'Authorization': 'Bearer ${SpotifyAuth.accessToken}'};
 
-  /// Loads the user's playlists into drawers (metadata only; tracks load lazily).
+  /// The current user's Spotify id, used to keep only playlists they created.
+  Future<String?> _fetchUserId() async {
+    try {
+      final res = await http.get(
+        Uri.parse('https://api.spotify.com/v1/me'),
+        headers: _authHeader,
+      );
+      if (res.statusCode != 200) return null;
+      return json.decode(res.body)['id'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Loads the user's OWN playlists into drawers (metadata only; tracks load
+  /// lazily). Playlists owned by others are hidden since Spotify no longer
+  /// returns their items.
   Future<void> fetchPlaylists() async {
     final token = SpotifyAuth.accessToken;
     if (token == null) return;
     try {
+      final userId = await _fetchUserId();
       final res = await http.get(
         Uri.parse('https://api.spotify.com/v1/me/playlists?limit=50'),
         headers: _authHeader,
@@ -119,11 +136,15 @@ class SpotifyService extends ChangeNotifier {
       final items = (json.decode(res.body)['items'] as List?)
               ?.cast<Map<String, dynamic>>() ??
           [];
-      _playlists = items
+      final all = items
           .asMap()
           .entries
           .map((e) => Playlist.fromJson(e.value, e.key))
           .toList();
+      // Keep only playlists the user created (owns), when we know the id.
+      _playlists = userId == null
+          ? all
+          : all.where((p) => p.ownerId == userId).toList();
       notifyListeners();
     } catch (_) {}
   }
