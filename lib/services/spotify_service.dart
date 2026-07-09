@@ -165,16 +165,25 @@ class SpotifyService extends ChangeNotifier {
     playlist.loadError = null;
     notifyListeners();
     try {
-      // Feb 2026 API: /tracks was renamed to /items, and items are only
-      // returned for playlists the user owns or collaborates on.
-      final res = await http.get(
-        Uri.parse(
-            'https://api.spotify.com/v1/playlists/${playlist.id}/items?limit=50'),
-        headers: _authHeader,
-      );
-      if (res.statusCode == 200) {
-        final items = (json.decode(res.body)['items'] as List?) ?? [];
-        final tapes = <CassetteTape>[];
+      // Feb 2026 API: /tracks was renamed to /items. Page through all tracks
+      // (up to a sane cap) so the whole playlist is shown, not just the first.
+      final tapes = <CassetteTape>[];
+      const pageSize = 50;
+      const maxTracks = 300;
+      int offset = 0;
+      String? error;
+      while (offset < maxTracks) {
+        final res = await http.get(
+          Uri.parse('https://api.spotify.com/v1/playlists/${playlist.id}/items'
+              '?limit=$pageSize&offset=$offset'),
+          headers: _authHeader,
+        );
+        if (res.statusCode != 200) {
+          if (offset == 0) error = _apiError(res.statusCode, res.body);
+          break;
+        }
+        final body = json.decode(res.body) as Map<String, dynamic>;
+        final items = (body['items'] as List?) ?? [];
         for (final item in items) {
           if (item is! Map) continue;
           // Feb 2026: the track lives under 'item' ('track' is deprecated).
@@ -187,15 +196,14 @@ class SpotifyService extends ChangeNotifier {
             } catch (_) {}
           }
         }
-        playlist.tapes = tapes;
-        if (tapes.isEmpty) {
-          playlist.loadError =
-              'No items returned. Spotify only exposes tracks for playlists you '
-              'own or collaborate on (Feb 2026 API change).';
-        }
-      } else {
-        playlist.tapes = [];
-        playlist.loadError = _apiError(res.statusCode, res.body);
+        if (items.length < pageSize || body['next'] == null) break;
+        offset += pageSize;
+      }
+      playlist.tapes = tapes;
+      if (tapes.isEmpty) {
+        playlist.loadError = error ??
+            'No items returned. Spotify only exposes tracks for playlists you '
+                'own or collaborate on (Feb 2026 API change).';
       }
     } catch (e) {
       playlist.tapes = [];

@@ -27,6 +27,16 @@ class _CabinetScreenState extends State<CabinetScreen> {
 
   SpotifyService get svc => widget.spotifyService;
 
+  @override
+  void initState() {
+    super.initState();
+    // Connect to Spotify automatically on launch. The SDK remembers the grant,
+    // so after the first approval this is silent.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!svc.isConnected && !svc.isLoading) svc.connectToSpotify();
+    });
+  }
+
   void _openPlayer(CassetteTape tape) {
     Navigator.push(
       context,
@@ -63,16 +73,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
                     child: ListView(
                       padding: const EdgeInsets.only(bottom: 32, top: 4),
                       children: [
-                        // Offline starter drawer.
-                        CabinetDrawer(
-                          playlist: _demoPlaylist,
-                          isOpen: _openKey == 'demo',
-                          onTap: () => _toggle('demo'),
-                          loading: false,
-                          tapes: CassetteTape.demoTapes,
-                          onTapeTap: _openPlayer,
-                        ),
-                        // Real Spotify playlists (after connect).
+                        // The user's own Spotify playlists as drawers.
                         for (final pl in svc.playlists)
                           CabinetDrawer(
                             playlist: pl,
@@ -83,8 +84,10 @@ class _CabinetScreenState extends State<CabinetScreen> {
                             loadError: pl.loadError,
                             onTapeTap: _openPlayer,
                           ),
+                        if (svc.isLoading && svc.playlists.isEmpty)
+                          _buildConnecting(),
                         if (svc.statusMessage != null) _buildStatus(svc.statusMessage!),
-                        if (!svc.isConnected) _buildConnectHint(),
+                        if (!svc.isConnected && !svc.isLoading) _buildConnectHint(),
                       ],
                     ),
                   ),
@@ -118,7 +121,9 @@ class _CabinetScreenState extends State<CabinetScreen> {
                 Text(
                   svc.isConnected
                       ? 'Pull a drawer to browse'
-                      : 'Starter tapes · connect for your playlists',
+                      : svc.isLoading
+                          ? 'Connecting to Spotify…'
+                          : 'Connect Spotify to load your playlists',
                   style: GoogleFonts.robotoMono(
                     fontSize: 11,
                     color: kVintageInk,
@@ -193,9 +198,18 @@ class _CabinetScreenState extends State<CabinetScreen> {
     );
   }
 
+  Widget _buildConnecting() {
+    return const Padding(
+      padding: EdgeInsets.only(top: 80),
+      child: Center(
+        child: CircularProgressIndicator(strokeWidth: 2, color: kGold),
+      ),
+    );
+  }
+
   Widget _buildConnectHint() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
       child: Text(
         'Tap the green link icon to connect Spotify and load your own playlists as drawers.',
         textAlign: TextAlign.center,
@@ -207,15 +221,6 @@ class _CabinetScreenState extends State<CabinetScreen> {
       ),
     );
   }
-
-  static final Playlist _demoPlaylist = Playlist(
-    id: 'demo',
-    name: 'Starter Mixtape',
-    owner: 'You',
-    ownerId: 'demo',
-    trackCount: CassetteTape.demoTapes.length,
-    accent: const Color(0xFFD94532),
-  );
 }
 
 class _RoundIconButton extends StatelessWidget {

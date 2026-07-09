@@ -355,8 +355,9 @@ class _SpineCarousel extends StatefulWidget {
 }
 
 class _SpineCarouselState extends State<_SpineCarousel> {
+  // Small fraction packs the spines tightly, like a full drawer of tapes.
   late final PageController _controller =
-      PageController(viewportFraction: 0.26);
+      PageController(viewportFraction: 0.15);
   double _page = 0;
 
   @override
