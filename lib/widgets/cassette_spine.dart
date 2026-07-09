@@ -12,7 +12,7 @@ class CassetteSpine extends StatelessWidget {
 
   const CassetteSpine({super.key, required this.tape, required this.onTap});
 
-  static const double width = 54;
+  static const double width = 52;
 
   @override
   Widget build(BuildContext context) {
@@ -121,33 +121,41 @@ class CassetteSpine extends StatelessWidget {
         quarterTurns: 3,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          // FittedBox shrinks the text to fit the spine so the full title and
+          // artist stay readable — no "..." truncation.
           child: Row(
             children: [
               Flexible(
                 flex: 3,
-                child: Text(
-                  tape.trackName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  softWrap: false,
-                  style: GoogleFonts.specialElite(
-                    fontSize: 11,
-                    color: kTextDark,
-                    fontWeight: FontWeight.bold,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    tape.trackName,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: GoogleFonts.specialElite(
+                      fontSize: 11,
+                      color: kTextDark,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Flexible(
                 flex: 2,
-                child: Text(
-                  tape.artistName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  softWrap: false,
-                  style: GoogleFonts.courierPrime(
-                    fontSize: 9,
-                    color: kTextDark.withValues(alpha: 0.6),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    tape.artistName,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: GoogleFonts.courierPrime(
+                      fontSize: 9,
+                      color: kTextDark.withValues(alpha: 0.6),
+                    ),
                   ),
                 ),
               ),

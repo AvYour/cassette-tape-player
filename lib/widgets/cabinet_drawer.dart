@@ -293,19 +293,22 @@ class _DrawerTray extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 210,
-      decoration: const BoxDecoration(
-        // Recessed inside-of-drawer look.
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF2A1C12), Color(0xFF3A2717)],
+    return ClipRRect(
+      // Keep the sliding cassettes contained within the drawer.
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+      child: Container(
+        width: double.infinity,
+        height: 220,
+        decoration: const BoxDecoration(
+          // Recessed inside-of-drawer look.
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF2A1C12), Color(0xFF3A2717)],
+          ),
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
+        child: _buildContent(),
       ),
-      child: _buildContent(),
     );
   }
 
@@ -341,9 +344,9 @@ class _DrawerTray extends StatelessWidget {
   }
 }
 
-/// Horizontal coverflow of cassette spines. The spine nearest the centre
-/// rises and enlarges (as if pulled up from the drawer); swiping brings the
-/// next tape forward. Tap the raised spine to open it.
+/// Tightly filed cassette spines that scroll horizontally inside the drawer,
+/// starting flush at the left. Whichever spine passes the drawer's focus line
+/// rises and enlarges, as if being lifted from the row. Tap any spine to open.
 class _SpineCarousel extends StatefulWidget {
   final List<CassetteTape> tapes;
   final void Function(CassetteTape tape) onTapeTap;
@@ -355,60 +358,70 @@ class _SpineCarousel extends StatefulWidget {
 }
 
 class _SpineCarouselState extends State<_SpineCarousel> {
-  // Small fraction packs the spines tightly, like a full drawer of tapes.
-  late final PageController _controller =
-      PageController(viewportFraction: 0.15);
-  double _page = 0;
+  final ScrollController _sc = ScrollController();
+  double _offset = 0;
+
+  static const double _itemW = 52;
+  static const double _gap = 3;
+  static const double _extent = _itemW + _gap; // packed slot width
+  static const double _leftPad = 14;
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(() {
-      setState(() => _page = _controller.page ?? 0);
+    _sc.addListener(() {
+      if (_sc.hasClients) setState(() => _offset = _sc.offset);
     });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _sc.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return PageView.builder(
-      controller: _controller,
-      itemCount: widget.tapes.length,
-      clipBehavior: Clip.none,
-      itemBuilder: (context, i) {
-        final distance = (_page - i).abs().clamp(0.0, 1.0);
-        final scale = 1.18 - 0.34 * distance; // focused biggest
-        final lift = (1 - distance) * 20; // focused rises out
-        final tape = widget.tapes[i];
-        return Center(
-          child: Transform.translate(
-            offset: Offset(0, -lift),
-            child: Transform.scale(
-              scale: scale,
-              child: Opacity(
-                opacity: 1 - 0.35 * distance,
-                child: CassetteSpine(
-                  tape: tape,
-                  onTap: () {
-                    if ((_page - i).abs() < 0.5) {
-                      widget.onTapeTap(tape);
-                    } else {
-                      _controller.animateToPage(
-                        i,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOutCubic,
-                      );
-                    }
-                  },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final focusX = constraints.maxWidth * 0.42;
+        return ListView.builder(
+          controller: _sc,
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          itemExtent: _extent,
+          padding: EdgeInsets.only(
+            left: _leftPad,
+            right: constraints.maxWidth - _extent - _leftPad,
+            top: 34,
+            bottom: 10,
+          ),
+          itemCount: widget.tapes.length,
+          itemBuilder: (context, i) {
+            final itemCenter = _leftPad + i * _extent + _itemW / 2 - _offset;
+            final dist =
+                ((itemCenter - focusX).abs() / (_extent * 1.7)).clamp(0.0, 1.0);
+            final scale = 1.16 - 0.26 * dist;
+            final lift = (1 - dist) * 18;
+            final tape = widget.tapes[i];
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: Transform.translate(
+                offset: Offset(0, -lift),
+                child: Transform.scale(
+                  scale: scale,
+                  alignment: Alignment.bottomCenter,
+                  child: SizedBox(
+                    width: _itemW,
+                    child: CassetteSpine(
+                      tape: tape,
+                      onTap: () => widget.onTapeTap(tape),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
