@@ -58,12 +58,14 @@ class CassetteTape {
       labelColor: palette.label,
       stripeColor: palette.stripe,
       durationMs: (track['duration_ms'] as int?) ?? 210000,
+      // Spotify's Web API does not expose lyrics, so the reel shows tasteful
+      // liner notes instead of pretending to scroll the song's words.
       lyrics: [
-        'Now spinning',
         name,
         artist,
         if (albumName.isNotEmpty) albumName,
-        if (year.isNotEmpty) '($year)',
+        if (year.isNotEmpty) year,
+        '♪',
       ],
     );
   }

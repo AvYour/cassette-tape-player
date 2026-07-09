@@ -156,9 +156,11 @@ class SpotifyService extends ChangeNotifier {
         final tapes = <CassetteTape>[];
         for (final item in items) {
           if (item is! Map) continue;
-          // Track may be nested under 'track' or be the item itself.
-          final raw = item['track'] ?? item;
-          if (raw is Map<String, dynamic> && raw['id'] != null) {
+          // Feb 2026: the track lives under 'item' ('track' is deprecated).
+          final raw = item['item'] ?? item['track'];
+          if (raw is Map<String, dynamic> &&
+              raw['id'] != null &&
+              raw['type'] != 'episode') {
             try {
               tapes.add(CassetteTape.fromSpotifyTrack(raw, tapes.length));
             } catch (_) {}
