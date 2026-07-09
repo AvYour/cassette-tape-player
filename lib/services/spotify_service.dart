@@ -142,9 +142,11 @@ class SpotifyService extends ChangeNotifier {
     playlist.loadError = null;
     notifyListeners();
     try {
+      // Feb 2026 API: /tracks was renamed to /items, and items are only
+      // returned for playlists the user owns or collaborates on.
       final res = await http.get(
         Uri.parse(
-            'https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50'),
+            'https://api.spotify.com/v1/playlists/${playlist.id}/items?limit=50'),
         headers: _authHeader,
       );
       if (res.statusCode == 200) {
@@ -152,16 +154,19 @@ class SpotifyService extends ChangeNotifier {
         final tapes = <CassetteTape>[];
         for (final item in items) {
           if (item is! Map) continue;
-          final track = item['track'];
-          if (track is Map<String, dynamic> && track['id'] != null) {
+          // Track may be nested under 'track' or be the item itself.
+          final raw = item['track'] ?? item;
+          if (raw is Map<String, dynamic> && raw['id'] != null) {
             try {
-              tapes.add(CassetteTape.fromSpotifyTrack(track, tapes.length));
+              tapes.add(CassetteTape.fromSpotifyTrack(raw, tapes.length));
             } catch (_) {}
           }
         }
         playlist.tapes = tapes;
         if (tapes.isEmpty) {
-          playlist.loadError = 'Loaded 0 playable tracks (${items.length} items)';
+          playlist.loadError =
+              'No items returned. Spotify only exposes tracks for playlists you '
+              'own or collaborate on (Feb 2026 API change).';
         }
       } else {
         playlist.tapes = [];
@@ -181,9 +186,10 @@ class SpotifyService extends ChangeNotifier {
     final token = SpotifyAuth.accessToken;
     if (token == null || query.trim().isEmpty) return [];
     try {
+      // Feb 2026 API: search limit max is now 10 (was 50).
       final res = await http.get(
         Uri.parse(
-            'https://api.spotify.com/v1/search?type=track&limit=21&q=${Uri.encodeQueryComponent(query)}'),
+            'https://api.spotify.com/v1/search?type=track&limit=10&q=${Uri.encodeQueryComponent(query)}'),
         headers: _authHeader,
       );
       if (res.statusCode != 200) {
