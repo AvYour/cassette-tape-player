@@ -361,8 +361,8 @@ class _SpineCarouselState extends State<_SpineCarousel> {
   final ScrollController _sc = ScrollController();
   double _offset = 0;
 
-  static const double _itemW = 52;
-  static const double _gap = 3;
+  static const double _itemW = CassetteSpine.width;
+  static const double _gap = 4;
   static const double _extent = _itemW + _gap; // packed slot width
   static const double _leftPad = 14;
 

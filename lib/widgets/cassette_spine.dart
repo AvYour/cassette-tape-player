@@ -13,7 +13,7 @@ class CassetteSpine extends StatelessWidget {
 
   const CassetteSpine({super.key, required this.tape, required this.onTap});
 
-  static const double width = 52;
+  static const double width = 66;
 
   @override
   Widget build(BuildContext context) {

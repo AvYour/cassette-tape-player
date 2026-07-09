@@ -60,8 +60,49 @@ class CassetteTapeView extends StatelessWidget {
                   ),
           ),
           const CustomPaint(painter: CassetteFrontPainter()),
+          if (tape.albumArtUrl != null && tape.albumArtUrl!.isNotEmpty)
+            _albumArtOnLabel(),
         ],
       ),
+    );
+  }
+
+  /// A small album-art sticker on the cassette label, so the tape is
+  /// recognisable by its cover as well as its colour.
+  Widget _albumArtOnLabel() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final h = constraints.maxHeight;
+        final size = h * 0.15;
+        return Positioned(
+          left: w * 0.11,
+          top: h * 0.145,
+          width: size,
+          height: size,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(2),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.25)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: Image.network(
+                tape.albumArtUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

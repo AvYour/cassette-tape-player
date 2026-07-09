@@ -294,6 +294,18 @@ class SpotifyService extends ChangeNotifier {
     }
   }
 
+  /// Fetches the live playback position from Spotify (used to re-sync lyrics
+  /// after the app returns from the background).
+  Future<int?> fetchPositionMs() async {
+    if (!_isConnected) return null;
+    try {
+      final st = await SpotifySdk.getPlayerState();
+      return st?.playbackPosition;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> seekTo(int positionMs) async {
     if (_isConnected) {
       await SpotifySdk.seekTo(positionedMilliseconds: positionMs);

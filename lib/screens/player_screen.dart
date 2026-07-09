@@ -13,7 +13,7 @@ import '../widgets/eject_button.dart';
 import '../widgets/lyrics_view.dart';
 import '../widgets/skeuo_button.dart';
 import '../widgets/title_header.dart';
-import '../widgets/vintage_background.dart';
+import '../widgets/dynamic_background.dart';
 import '../widgets/volume_tuner.dart';
 
 /// The tape player screen: eject bar, J-card marquee header, the cassette,
@@ -43,7 +43,7 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   // Nominal hub speeds in deg/s. The take-up (right) hub leads the supply
   // (left) hub by the wound-radius ratio, exactly as in the reference.
   static const double _rightSpeed = 120;
@@ -78,8 +78,23 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ticker = createTicker(_tick)..start();
     _fetchLyrics();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The ticker freezes in the background while Spotify keeps playing, so on
+    // return we snap our position to Spotify's real one to re-sync the lyrics.
+    if (state == AppLifecycleState.resumed && _tapeState == TapeState.playing) {
+      widget.spotifyService.fetchPositionMs().then((ms) {
+        if (ms != null && mounted) {
+          _positionMs = ms.toDouble();
+          _lastEventPos = ms;
+        }
+      });
+    }
   }
 
   Future<void> _fetchLyrics() async {
@@ -147,6 +162,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     _angles.dispose();
     _lyricProgress.dispose();
@@ -287,7 +303,8 @@ class _PlayerScreenState extends State<PlayerScreen>
         parent: routeAnim, curve: const Interval(0.4, 1, curve: Curves.easeOutCubic));
 
     return Scaffold(
-      body: VintageBackground(
+      body: DynamicMusicBackground(
+        tape: _tape,
         child: SafeArea(
           child: Column(
             children: [
