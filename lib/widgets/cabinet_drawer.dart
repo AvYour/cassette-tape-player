@@ -44,6 +44,7 @@ class CabinetDrawer extends StatelessWidget {
           AnimatedSize(
             duration: const Duration(milliseconds: 320),
             curve: Curves.easeOutCubic,
+            clipBehavior: Clip.none,
             child: isOpen
                 ? _DrawerTray(
                     loading: loading,
@@ -293,9 +294,10 @@ class _DrawerTray extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      // Keep the sliding cassettes contained within the drawer.
-      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+    // Clip the sides and bottom to the drawer, but leave the TOP open so the
+    // raised (focused) cassette can rise out of the drawer instead of being cut.
+    return ClipRect(
+      clipper: const _TopOpenClipper(overflow: 64),
       child: Container(
         width: double.infinity,
         height: 256,
@@ -306,6 +308,7 @@ class _DrawerTray extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: [Color(0xFF2A1C12), Color(0xFF3A2717)],
           ),
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
         ),
         child: _buildContent(),
       ),
@@ -389,6 +392,9 @@ class _SpineCarouselState extends State<_SpineCarousel> {
           controller: _sc,
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
+          // Don't clip vertically — the raised spine rises out of the drawer;
+          // the tray's ClipRect keeps the sides/bottom contained.
+          clipBehavior: Clip.none,
           itemExtent: _extent,
           padding: EdgeInsets.only(
             left: _leftPad,
@@ -402,7 +408,7 @@ class _SpineCarouselState extends State<_SpineCarousel> {
             final dist =
                 ((itemCenter - focusX).abs() / (_extent * 1.7)).clamp(0.0, 1.0);
             final scale = 1.16 - 0.26 * dist;
-            final lift = (1 - dist) * 18;
+            final lift = (1 - dist) * 30;
             final tape = widget.tapes[i];
             return Align(
               alignment: Alignment.bottomCenter,
@@ -426,4 +432,19 @@ class _SpineCarouselState extends State<_SpineCarousel> {
       },
     );
   }
+}
+
+/// Clips left/right/bottom to the drawer but leaves [overflow] pixels open at
+/// the top so a raised cassette can rise out of the drawer.
+class _TopOpenClipper extends CustomClipper<Rect> {
+  final double overflow;
+
+  const _TopOpenClipper({required this.overflow});
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTRB(0, -overflow, size.width, size.height);
+
+  @override
+  bool shouldReclip(_TopOpenClipper old) => old.overflow != overflow;
 }
