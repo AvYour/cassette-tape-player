@@ -71,7 +71,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   double _positionMs = 0;
   double _anchorPosMs = 0;
   DateTime _anchorWall = DateTime.now();
-  int _lastEventPos = -1;
+  DateTime _lastPoll = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Re-anchor the position estimate to [posMs] as of now.
   void _anchor(double posMs) {
@@ -98,10 +98,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _tapeState = TapeState.playing;
       _audioStarted = true;
       svc.fetchPositionMs().then((ms) {
-        if (ms != null && mounted) {
-          _anchor(ms.toDouble());
-          _lastEventPos = ms;
-        }
+        if (ms != null && mounted) _anchor(ms.toDouble());
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -115,10 +112,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     // return we snap our position to Spotify's real one to re-sync the lyrics.
     if (state == AppLifecycleState.resumed && _tapeState == TapeState.playing) {
       widget.spotifyService.fetchPositionMs().then((ms) {
-        if (ms != null && mounted) {
-          _anchor(ms.toDouble());
-          _lastEventPos = ms;
-        }
+        if (ms != null && mounted) _anchor(ms.toDouble());
       });
     }
   }
@@ -148,7 +142,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _tapeState = TapeState.playing;
     });
     _anchor(0);
-    _lastEventPos = -1;
+    _lastPoll = DateTime.fromMillisecondsSinceEpoch(0);
     _speedMul = 0;
     _lyricProgress.value = 0;
     _audioStarted = true;
@@ -276,13 +270,18 @@ class _PlayerScreenState extends State<PlayerScreen>
     final svc = widget.spotifyService;
     final dur = _tape.durationMs.toDouble();
 
-    // Snap the anchor to fresh Spotify events (position at event time).
-    if (svc.isConnected && _tapeState == TapeState.playing) {
-      final st = svc.playerState;
-      if (st != null && st.playbackPosition != _lastEventPos) {
-        _lastEventPos = st.playbackPosition;
-        _anchor(st.playbackPosition.toDouble());
-      }
+    // Periodically re-sync to Spotify's REAL position via getPlayerState
+    // (subscription events carry a stale position, so we don't trust them).
+    // Wall-clock interpolation covers the gaps between polls.
+    if (svc.isConnected &&
+        _tapeState == TapeState.playing &&
+        DateTime.now().difference(_lastPoll).inMilliseconds > 3000) {
+      _lastPoll = DateTime.now();
+      svc.fetchPositionMs().then((ms) {
+        if (ms != null && mounted && _tapeState == TapeState.playing) {
+          _anchor(ms.toDouble());
+        }
+      });
     }
 
     switch (_tapeState) {
