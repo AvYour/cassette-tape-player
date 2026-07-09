@@ -82,6 +82,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
                             tapes: pl.tapes,
                             onTapeTap: _openPlayer,
                           ),
+                        if (svc.statusMessage != null) _buildStatus(svc.statusMessage!),
                         if (!svc.isConnected) _buildConnectHint(),
                       ],
                     ),
@@ -145,6 +146,48 @@ class _CabinetScreenState extends State<CabinetScreen> {
               onTap: svc.isLoading ? null : svc.connectToSpotify,
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatus(String message) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, size: 18, color: kVintageInk),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.robotoMono(
+                  fontSize: 11,
+                  height: 1.4,
+                  color: kTextDark,
+                ),
+              ),
+            ),
+            if (svc.isConnected && !svc.hasWebApi)
+              GestureDetector(
+                onTap: svc.isLoading ? null : svc.connectToSpotify,
+                child: Text(
+                  'RETRY',
+                  style: GoogleFonts.robotoMono(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF1DB954),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

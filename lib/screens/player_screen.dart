@@ -94,6 +94,12 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
+  void _eject() {
+    // Stop playback (and the demo sim) before leaving the player.
+    widget.spotifyService.pause();
+    Navigator.of(context).maybePop();
+  }
+
   void _tick(Duration elapsed) {
     final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(0.0, 0.05);
     _last = elapsed;
@@ -155,7 +161,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                       width: 110,
                       height: 44,
                       child: VintageEjectButton(
-                        onPressed: () => Navigator.of(context).maybePop(),
+                        onPressed: _eject,
                       ),
                     ),
                   ],

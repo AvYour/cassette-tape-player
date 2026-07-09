@@ -165,6 +165,11 @@ class _SearchScreenState extends State<SearchScreen> {
     if (!svc.isConnected) {
       return _hint('Connect Spotify from the cabinet to search the catalogue.');
     }
+    if (!svc.hasWebApi) {
+      return _hint(
+          'Search needs the Spotify Web API token, which was not granted. '
+          'Reconnect from the cabinet (RETRY) and approve all permissions.');
+    }
     if (_searching) {
       return const Center(
         child: CircularProgressIndicator(strokeWidth: 2, color: kGold),

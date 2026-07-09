@@ -22,12 +22,19 @@ class SpotifyService extends ChangeNotifier {
   bool _demoPlaying = false;
   static const Duration _demoTick = Duration(milliseconds: 200);
 
+  String? _statusMessage;
+
   bool get isConnected => _isConnected;
   bool get isLoading => _isLoading;
   List<CassetteTape> get tapes => _tapes;
   List<Playlist> get playlists => _playlists;
   PlayerState? get playerState => _playerState;
   bool get isDemoMode => !_isConnected;
+  bool get hasWebApi => SpotifyAuth.hasWebApi;
+
+  /// A short human-readable note about the last connect result, e.g. why
+  /// playlists/search are unavailable. Null when everything is fine.
+  String? get statusMessage => _statusMessage;
 
   bool get isPlaying {
     if (!_isConnected) return _demoPlaying;
@@ -45,12 +52,29 @@ class SpotifyService extends ChangeNotifier {
 
   Future<void> connectToSpotify() async {
     _isLoading = true;
+    _statusMessage = null;
     notifyListeners();
 
-    _isConnected = await SpotifyAuth.connect();
+    // Fetch the Web API token first (best-effort) so it can share the auth
+    // session with the remote connect, then connect for playback.
+    await SpotifyAuth.fetchToken();
+    _isConnected = await SpotifyAuth.connectRemote();
+
     if (_isConnected) {
       _subscribeToPlayerState();
-      await fetchPlaylists();
+      if (SpotifyAuth.hasWebApi) {
+        await fetchPlaylists();
+        if (_playlists.isEmpty) {
+          _statusMessage = 'Connected, but no playlists found on your account.';
+        }
+      } else {
+        _statusMessage =
+            'Playback connected, but Spotify Web API token was not granted — '
+            'search and playlists are unavailable.';
+      }
+    } else {
+      _statusMessage =
+          'Could not connect to Spotify. Open the Spotify app, log in, and try again.';
     }
 
     _isLoading = false;
