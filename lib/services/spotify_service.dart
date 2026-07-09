@@ -129,8 +129,10 @@ class SpotifyService extends ChangeNotifier {
   }
 
   /// Loads the tracks of a playlist as cassettes, caching them on the model.
+  /// A previously failed/empty load is retried when the drawer is reopened.
   Future<void> loadPlaylistTracks(Playlist playlist) async {
-    if (playlist.tapes != null || playlist.loading) return;
+    if (playlist.loading) return;
+    if (playlist.tapes != null && playlist.tapes!.isNotEmpty) return;
     final token = SpotifyAuth.accessToken;
     if (token == null) {
       playlist.tapes = [];
