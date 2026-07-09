@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/cassette_tape.dart';
 import '../painters/cassette_tape_painter.dart';
-import 'tape_color_builder.dart';
 
 /// Rotation state for the two reel hubs, in degrees. Mutated by the player's
 /// frame loop; the hub layer listens directly so only it repaints per frame.
@@ -26,83 +25,61 @@ class CassetteTapeView extends StatelessWidget {
 
   const CassetteTapeView({super.key, required this.tape, this.angles});
 
+  static const Color _neutralShell = Color(0xFF2A2622);
+  static const Color _neutralStripe = Color(0xFF14100C);
+
   @override
   Widget build(BuildContext context) {
     final a = angles;
+    final art = tape.albumArtUrl;
+    final hasArt = art != null && art.isNotEmpty;
     return AspectRatio(
       aspectRatio: kCassetteAspect,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          TapeColorBuilder(
-            tape: tape,
-            builder: (context, colors) => CustomPaint(
-              painter: CassetteBasePainter(
-                bodyColor: colors.body,
-                labelColor: colors.label,
-                stripeColor: colors.stripe,
-              ),
-            ),
-          ),
-          RepaintBoundary(
-            child: a == null
-                ? const CustomPaint(
-                    painter: CassetteHubsPainter(leftDeg: 0, rightDeg: 0),
-                  )
-                : AnimatedBuilder(
-                    animation: a,
-                    builder: (context, _) => CustomPaint(
-                      painter: CassetteHubsPainter(
-                        leftDeg: a.leftDeg,
-                        rightDeg: a.rightDeg,
-                      ),
-                    ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final radius = constraints.maxHeight * 0.06;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              // The album art IS the cassette body when available.
+              if (hasArt)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(radius),
+                  child: Image.network(
+                    art,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Container(color: _neutralShell),
                   ),
-          ),
-          const CustomPaint(painter: CassetteFrontPainter()),
-          if (tape.albumArtUrl != null && tape.albumArtUrl!.isNotEmpty)
-            _albumArtOnLabel(),
-        ],
-      ),
-    );
-  }
-
-  /// A small album-art sticker on the cassette label, so the tape is
-  /// recognisable by its cover as well as its colour.
-  Widget _albumArtOnLabel() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final w = constraints.maxWidth;
-        final h = constraints.maxHeight;
-        final size = h * 0.15;
-        return Positioned(
-          left: w * 0.11,
-          top: h * 0.145,
-          width: size,
-          height: size,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(2),
-              border: Border.all(color: Colors.black.withValues(alpha: 0.25)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 2,
-                  offset: const Offset(0, 1),
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: Image.network(
-                tape.albumArtUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              CustomPaint(
+                painter: CassetteBasePainter(
+                  bodyColor: _neutralShell,
+                  labelColor: const Color(0xFFF4EFE6),
+                  stripeColor: hasArt ? _neutralStripe : tape.stripeColor,
+                  useArt: hasArt,
+                ),
               ),
-            ),
-          ),
-        );
-      },
+              RepaintBoundary(
+                child: a == null
+                    ? const CustomPaint(
+                        painter: CassetteHubsPainter(leftDeg: 0, rightDeg: 0),
+                      )
+                    : AnimatedBuilder(
+                        animation: a,
+                        builder: (context, _) => CustomPaint(
+                          painter: CassetteHubsPainter(
+                            leftDeg: a.leftDeg,
+                            rightDeg: a.rightDeg,
+                          ),
+                        ),
+                      ),
+              ),
+              const CustomPaint(painter: CassetteFrontPainter()),
+            ],
+          );
+        },
+      ),
     );
   }
 }

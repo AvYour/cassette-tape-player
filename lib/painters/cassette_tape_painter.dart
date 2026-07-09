@@ -22,10 +22,16 @@ class CassetteBasePainter extends CustomPainter {
   final Color labelColor;
   final Color stripeColor;
 
+  /// When true the shell body is left translucent so an album-art image behind
+  /// the painter shows through as the cassette's body (only a plastic sheen is
+  /// drawn on top).
+  final bool useArt;
+
   const CassetteBasePainter({
     required this.bodyColor,
     required this.labelColor,
     required this.stripeColor,
+    this.useArt = false,
   });
 
   @override
@@ -36,16 +42,29 @@ class CassetteBasePainter extends CustomPainter {
     final shell =
         RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(h * 0.06));
 
-    // 1. Plastic shell.
-    canvas.drawRRect(
-      shell,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          Offset(w * 0.5, h * 0.3),
-          w * 0.8,
-          [bodyColor.withValues(alpha: 0.9), darken(bodyColor, 0.3)],
-        ),
-    );
+    // 1. Plastic shell — solid colour, or a sheen over the album art.
+    if (useArt) {
+      canvas.drawRRect(
+        shell,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset.zero,
+            Offset(w * 0.4, h),
+            const [Color(0x33FFFFFF), Color(0x11000000), Color(0x55000000)],
+            const [0.0, 0.4, 1.0],
+          ),
+      );
+    } else {
+      canvas.drawRRect(
+        shell,
+        Paint()
+          ..shader = ui.Gradient.radial(
+            Offset(w * 0.5, h * 0.3),
+            w * 0.8,
+            [bodyColor.withValues(alpha: 0.9), darken(bodyColor, 0.3)],
+          ),
+      );
+    }
     canvas.drawRRect(
       shell,
       Paint()
@@ -214,7 +233,8 @@ class CassetteBasePainter extends CustomPainter {
   bool shouldRepaint(CassetteBasePainter old) =>
       old.bodyColor != bodyColor ||
       old.labelColor != labelColor ||
-      old.stripeColor != stripeColor;
+      old.stripeColor != stripeColor ||
+      old.useArt != useArt;
 }
 
 /// Middle layer: the two rotating metallic hubs, clipped to the window.
