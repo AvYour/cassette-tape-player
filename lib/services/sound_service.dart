@@ -1,6 +1,6 @@
 import 'package:audioplayers/audioplayers.dart';
 
-/// Plays the short mechanical cassette sound effects (deck engaging/stopping).
+/// Plays the mechanical cassette sound effects (deck insert/close/eject).
 /// Fails silently if the assets are missing or audio is unavailable.
 class SoundService {
   static final AudioPlayer _player = AudioPlayer()
@@ -9,13 +9,17 @@ class SoundService {
   static Future<void> _play(String asset) async {
     try {
       await _player.stop();
-      await _player.play(AssetSource(asset), volume: 0.7);
+      await _player.play(AssetSource(asset), volume: 0.8);
     } catch (_) {}
   }
 
-  /// The "ka-chunk" + motor spin-up when playback starts.
-  static void tapeStart() => _play('sounds/tape_start.wav');
+  /// Inserting/engaging the tape — played when playback starts or a new tape
+  /// begins.
+  static void tapeStart() => _play('sounds/tape_insert.mp3');
 
-  /// The firm "clunk" when the deck stops / the tape finishes.
-  static void tapeStop() => _play('sounds/tape_stop.wav');
+  /// Closing the deck — played when playback stops / the tape finishes.
+  static void tapeStop() => _play('sounds/tape_close.mp3');
+
+  /// Ejecting the tape — played when leaving the player via Eject.
+  static void eject() => _play('sounds/tape_eject.mp3');
 }

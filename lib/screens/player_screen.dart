@@ -278,7 +278,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _eject() {
     // Eject stops playback for good and clears the mini-player.
-    SoundService.tapeStop();
+    SoundService.eject();
     widget.spotifyService.pause();
     widget.spotifyService.clearNowPlaying();
     Navigator.of(context).maybePop();
