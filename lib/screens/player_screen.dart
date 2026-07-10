@@ -151,7 +151,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     _lyricProgress.value = 0;
     _audioStarted = true;
     SoundService.tapeStart();
-    widget.spotifyService.playTape(_tape);
+    // Play this tape and re-hand the following tracks to Spotify so background
+    // auto-advance still works after a manual skip.
+    widget.spotifyService.playQueue(widget.queue, _index);
     widget.spotifyService.setNowPlaying(widget.queue, _index);
     _fetchLyrics();
   }
@@ -171,30 +173,18 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
   }
 
+  /// Play the next tape in our queue (drives Spotify directly, so it always
+  /// works regardless of Spotify's own queue state).
   void _skipNext() {
-    final svc = widget.spotifyService;
-    if (svc.isConnected) {
-      // Let Spotify advance its queue; _followSpotify updates the display.
-      svc.skipNext();
-    } else if (_index + 1 < widget.queue.length) {
-      _goToIndex(_index + 1);
-    }
+    if (_index + 1 < widget.queue.length) _goToIndex(_index + 1);
   }
 
   /// Restart the current tape if we're past the intro, otherwise go back one.
   void _skipPrevious() {
-    final svc = widget.spotifyService;
-    if (svc.isConnected) {
-      if (_positionMs > 3000) {
-        _anchor(0);
-        _lyricProgress.value = 0;
-        svc.seekTo(0);
-      } else {
-        svc.skipPrevious();
-      }
-    } else if (_positionMs > 3000 || _index == 0) {
+    if (_positionMs > 3000 || _index == 0) {
       _anchor(0);
       _lyricProgress.value = 0;
+      if (widget.spotifyService.isConnected) widget.spotifyService.seekTo(0);
     } else {
       _goToIndex(_index - 1);
     }
