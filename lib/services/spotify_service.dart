@@ -92,11 +92,9 @@ class SpotifyService extends ChangeNotifier {
     _statusMessage = null;
     notifyListeners();
 
-    // Reuse a stored token when possible so we only show the Spotify consent
-    // screen once; otherwise fetch a fresh one (prompts).
-    if (!await SpotifyAuth.loadStoredToken()) {
-      await SpotifyAuth.fetchToken();
-    }
+    // Get a Web API token via PKCE (silent refresh when possible, consent only
+    // the first time), then connect the App Remote for playback.
+    await SpotifyAuth.ensureToken();
     _isConnected = await SpotifyAuth.connectRemote();
 
     if (_isConnected) {

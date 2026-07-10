@@ -16,6 +16,8 @@ dependencies:
   google_fonts: ^6.2.1
   palette_generator: ^0.3.3
   audioplayers: ^6.1.0
+  crypto: ^3.0.3
+  flutter_web_auth_2: ^4.1.0
 
 # Vendored spotify_sdk: the published 3.0.0 still ships Flutter v1 embedding
 # (PluginRegistry.Registrar), which no longer compiles on current Flutter.
