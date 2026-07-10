@@ -271,6 +271,10 @@ class SpotifyService extends ChangeNotifier {
     }
   }
 
+  /// The Spotify URI of the track Spotify is currently playing (from the
+  /// subscription), used to keep the app's display in step with Spotify.
+  String? get currentTrackUri => _playerState?.track?.uri;
+
   /// Start playing a tape. Plays the real track through Spotify when connected
   /// (and the tape has a URI); otherwise runs the local demo simulation so the
   /// reels still spin and the lyrics still scroll.
@@ -281,6 +285,29 @@ class SpotifyService extends ChangeNotifier {
       _demoTape = tape;
       _demoProgress = 0.0;
       _startDemoTimer();
+    }
+  }
+
+  /// Play [queue] starting at [index] and hand the following tracks to Spotify's
+  /// own queue, so Spotify advances through them in order — even while the app
+  /// is backgrounded — instead of falling back to its autoplay recommendations.
+  Future<void> playQueue(List<CassetteTape> queue, int index) async {
+    if (index < 0 || index >= queue.length) return;
+    if (!_isConnected) {
+      await playTape(queue[index]);
+      return;
+    }
+    final start = queue[index];
+    if (start.spotifyUri.isEmpty) return;
+    await SpotifySdk.play(spotifyUri: start.spotifyUri);
+    // Queue the next tracks (cap so we don't spam the API on huge playlists).
+    final end = (index + 1 + 30).clamp(0, queue.length);
+    for (int i = index + 1; i < end; i++) {
+      final uri = queue[i].spotifyUri;
+      if (uri.isEmpty) continue;
+      try {
+        await SpotifySdk.queue(spotifyUri: uri);
+      } catch (_) {}
     }
   }
 

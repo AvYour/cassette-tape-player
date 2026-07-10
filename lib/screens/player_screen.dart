@@ -88,6 +88,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    widget.spotifyService.addListener(_followSpotify);
     _ticker = createTicker(_tick)..start();
     _fetchLyrics();
 
@@ -169,15 +170,29 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   void _skipNext() {
-    if (_index + 1 < widget.queue.length) _goToIndex(_index + 1);
+    final svc = widget.spotifyService;
+    if (svc.isConnected) {
+      // Let Spotify advance its queue; _followSpotify updates the display.
+      svc.skipNext();
+    } else if (_index + 1 < widget.queue.length) {
+      _goToIndex(_index + 1);
+    }
   }
 
   /// Restart the current tape if we're past the intro, otherwise go back one.
   void _skipPrevious() {
-    if (_positionMs > 3000 || _index == 0) {
+    final svc = widget.spotifyService;
+    if (svc.isConnected) {
+      if (_positionMs > 3000) {
+        _anchor(0);
+        _lyricProgress.value = 0;
+        svc.seekTo(0);
+      } else {
+        svc.skipPrevious();
+      }
+    } else if (_positionMs > 3000 || _index == 0) {
       _anchor(0);
       _lyricProgress.value = 0;
-      if (widget.spotifyService.isConnected) widget.spotifyService.seekTo(0);
     } else {
       _goToIndex(_index - 1);
     }
@@ -186,10 +201,41 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.spotifyService.removeListener(_followSpotify);
     _ticker.dispose();
     _angles.dispose();
     _lyricProgress.dispose();
     super.dispose();
+  }
+
+  /// Follow Spotify: when it moves to another tape in our queue (its own
+  /// auto-advance, or a background change), update the display to match.
+  void _followSpotify() {
+    final svc = widget.spotifyService;
+    if (!svc.isConnected) return;
+    final uri = svc.currentTrackUri;
+    if (uri == null || uri.isEmpty || uri == _tape.spotifyUri) return;
+    final idx = widget.queue.indexWhere((t) => t.spotifyUri == uri);
+    if (idx != -1 && idx != _index) _followToIndex(idx);
+  }
+
+  /// Switch the display to queue[i] without issuing playback (Spotify is
+  /// already playing it).
+  void _followToIndex(int i) {
+    if (!mounted) return;
+    setState(() {
+      _index = i;
+      _lyrics = _tape.lyrics;
+      _lyricTimesMs = null;
+      _tapeState = TapeState.playing;
+    });
+    _anchor(0);
+    _lastPoll = DateTime.fromMillisecondsSinceEpoch(0);
+    _speedMul = 0;
+    _lyricProgress.value = 0;
+    _audioStarted = true;
+    widget.spotifyService.setNowPlaying(widget.queue, _index);
+    _fetchLyrics();
   }
 
   void _setTapeState(TapeState state) {
@@ -208,7 +254,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       case TapeState.playing:
         if (!_audioStarted) {
           _audioStarted = true;
-          svc.playTape(_tape);
+          svc.playQueue(widget.queue, _index);
           svc.setNowPlaying(widget.queue, _index);
         } else {
           // Resume at the (possibly scrubbed) position.
@@ -258,9 +304,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     _updatePosition(dt);
     _updateLyricProgress();
 
-    // Roll on to the next tape when this one finishes.
+    // In demo mode we advance the queue ourselves; when connected, Spotify
+    // advances its own queue and _followSpotify keeps the display in sync.
     final dur = _tape.durationMs.toDouble();
-    if (_tapeState == TapeState.playing &&
+    if (!widget.spotifyService.isConnected &&
+        _tapeState == TapeState.playing &&
         dur > 1000 &&
         _positionMs >= dur - 250) {
       _advanceToNext();

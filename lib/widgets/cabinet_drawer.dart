@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
@@ -363,6 +364,8 @@ class _SpineCarousel extends StatefulWidget {
 class _SpineCarouselState extends State<_SpineCarousel> {
   final ScrollController _sc = ScrollController();
   double _offset = 0;
+  double _focusX = 0;
+  int _focused = 0;
 
   static const double _itemW = CassetteSpine.width;
   static const double _gap = 4;
@@ -373,7 +376,16 @@ class _SpineCarouselState extends State<_SpineCarousel> {
   void initState() {
     super.initState();
     _sc.addListener(() {
-      if (_sc.hasClients) setState(() => _offset = _sc.offset);
+      if (!_sc.hasClients) return;
+      setState(() => _offset = _sc.offset);
+      // A tactile detent each time a new cassette slides under the focus line.
+      final f = ((_offset + _focusX - _leftPad - _itemW / 2) / _extent)
+          .round()
+          .clamp(0, widget.tapes.length - 1);
+      if (f != _focused) {
+        _focused = f;
+        HapticFeedback.selectionClick();
+      }
     });
   }
 
@@ -388,6 +400,7 @@ class _SpineCarouselState extends State<_SpineCarousel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final focusX = constraints.maxWidth * 0.42;
+        _focusX = focusX;
         return ListView.builder(
           controller: _sc,
           scrollDirection: Axis.horizontal,

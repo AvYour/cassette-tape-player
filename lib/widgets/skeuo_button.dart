@@ -77,6 +77,7 @@ class _SkeuoButtonState extends State<SkeuoButton>
                 ? (_) {
                     _pressed = true;
                     HapticFeedback.lightImpact();
+                    SystemSound.play(SystemSoundType.click);
                     _settle();
                   }
                 : null,
