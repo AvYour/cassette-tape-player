@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../painters/cassette_tape_painter.dart';
 import '../services/lyrics_service.dart';
+import '../services/sound_service.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../widgets/cassette_tape_view.dart';
@@ -149,6 +150,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _speedMul = 0;
     _lyricProgress.value = 0;
     _audioStarted = true;
+    SoundService.tapeStart();
     widget.spotifyService.playTape(_tape);
     widget.spotifyService.setNowPlaying(widget.queue, _index);
     _fetchLyrics();
@@ -234,16 +236,20 @@ class _PlayerScreenState extends State<PlayerScreen>
     _speedMul = 0;
     _lyricProgress.value = 0;
     _audioStarted = true;
+    SoundService.tapeStart();
     widget.spotifyService.setNowPlaying(widget.queue, _index);
     _fetchLyrics();
   }
 
   void _setTapeState(TapeState state) {
     if (state == _tapeState) return;
+    final wasPlaying = _tapeState == TapeState.playing;
     setState(() => _tapeState = state);
     // The reference frame loop restarts per state change, resetting the
     // multiplier so every transition re-ramps from zero.
     _speedMul = 0;
+    if (state == TapeState.playing && !wasPlaying) SoundService.tapeStart();
+    if (state == TapeState.stopped) SoundService.tapeStop();
     _handleAudio(state);
   }
 
@@ -272,6 +278,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _eject() {
     // Eject stops playback for good and clears the mini-player.
+    SoundService.tapeStop();
     widget.spotifyService.pause();
     widget.spotifyService.clearNowPlaying();
     Navigator.of(context).maybePop();
