@@ -48,9 +48,9 @@ class SpotifyAuth {
       base64UrlEncode(sha256.convert(utf8.encode(verifier)).bytes)
           .replaceAll('=', '');
 
-  /// Ensures a valid Web API token: reuse the stored one, silently refresh it,
-  /// or (only when there's no refresh token) prompt for consent once.
-  static Future<bool> ensureToken() async {
+  /// Gets a Web API token WITHOUT showing any UI: reuse the stored one or
+  /// silently refresh it. Returns false if neither is available.
+  static Future<bool> ensureTokenSilent() async {
     final stored = await _storage.read(key: _kAccess);
     final expiry = int.tryParse(await _storage.read(key: _kExpiry) ?? '');
     if (stored != null &&
@@ -60,9 +60,12 @@ class SpotifyAuth {
       return true;
     }
     final refresh = await _storage.read(key: _kRefresh);
-    if (refresh != null && await _refresh(refresh)) return true;
-    return _authorize();
+    return refresh != null && await _refresh(refresh);
   }
+
+  /// Prompts the user for consent (PKCE web-auth) to obtain a fresh token and a
+  /// refresh token. Call this only from an explicit user action.
+  static Future<bool> authorizeInteractive() => _authorize();
 
   static Future<bool> _authorize() async {
     try {

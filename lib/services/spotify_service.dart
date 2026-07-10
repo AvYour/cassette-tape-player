@@ -87,28 +87,33 @@ class SpotifyService extends ChangeNotifier {
     return (state.playbackPosition / duration).clamp(0.0, 1.0);
   }
 
-  Future<void> connectToSpotify() async {
+  /// Connects for playback and (silently or, when [interactive], with a consent
+  /// prompt) obtains a Web API token. Playback is connected FIRST so it never
+  /// depends on the Web API auth.
+  Future<void> connectToSpotify({bool interactive = false}) async {
     _isLoading = true;
     _statusMessage = null;
     notifyListeners();
 
-    // Get a Web API token via PKCE (silent refresh when possible, consent only
-    // the first time), then connect the App Remote for playback.
-    await SpotifyAuth.ensureToken();
+    // 1. App Remote for playback — the important part, independent of Web API.
     _isConnected = await SpotifyAuth.connectRemote();
+    if (_isConnected) _subscribeToPlayerState();
 
-    if (_isConnected) {
-      _subscribeToPlayerState();
-      if (SpotifyAuth.hasWebApi) {
-        await fetchPlaylists();
-        if (_playlists.isEmpty) {
-          _statusMessage = 'Connected, but no playlists found on your account.';
-        }
-      } else {
-        _statusMessage =
-            'Playback connected, but Spotify Web API token was not granted — '
-            'search and playlists are unavailable.';
+    // 2. Web API token: reuse/refresh silently; only prompt on explicit request.
+    var hasToken = await SpotifyAuth.ensureTokenSilent();
+    if (!hasToken && interactive) {
+      hasToken = await SpotifyAuth.authorizeInteractive();
+    }
+
+    if (_isConnected && hasToken) {
+      await fetchPlaylists();
+      if (_playlists.isEmpty) {
+        _statusMessage = 'Connected, but no playlists found on your account.';
       }
+    } else if (_isConnected && !hasToken) {
+      _statusMessage =
+          'Playback connected. Tap the green link to sign in for your '
+          'playlists and search.';
     } else {
       _statusMessage =
           'Could not connect to Spotify. Open the Spotify app, log in, and try again.';
