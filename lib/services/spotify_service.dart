@@ -87,10 +87,9 @@ class SpotifyService extends ChangeNotifier {
     return (state.playbackPosition / duration).clamp(0.0, 1.0);
   }
 
-  /// Connects for playback and (silently or, when [interactive], with a consent
-  /// prompt) obtains a Web API token. Playback is connected FIRST so it never
-  /// depends on the Web API auth.
-  Future<void> connectToSpotify({bool interactive = false}) async {
+  /// Connects for playback and obtains a Web API token. Playback is connected
+  /// FIRST so it never depends on the Web API auth.
+  Future<void> connectToSpotify() async {
     _isLoading = true;
     _statusMessage = null;
     notifyListeners();
@@ -99,11 +98,11 @@ class SpotifyService extends ChangeNotifier {
     _isConnected = await SpotifyAuth.connectRemote();
     if (_isConnected) _subscribeToPlayerState();
 
-    // 2. Web API token: reuse/refresh silently; only prompt on explicit request.
+    // 2. Web API token: reuse the cached one, else fetch a fresh one via the
+    // SDK (usually silent after the first authorization). Renews on every
+    // connect, so an expired token is replaced automatically.
     var hasToken = await SpotifyAuth.ensureTokenSilent();
-    if (!hasToken && interactive) {
-      hasToken = await SpotifyAuth.authorizeInteractive();
-    }
+    if (!hasToken) hasToken = await SpotifyAuth.authorizeInteractive();
 
     if (_isConnected && hasToken) {
       await fetchPlaylists();
@@ -135,13 +134,20 @@ class SpotifyService extends ChangeNotifier {
   Map<String, String> get _authHeader =>
       {'Authorization': 'Bearer ${SpotifyAuth.accessToken}'};
 
+  /// GET a Web API endpoint; if the token has expired (401), fetch a fresh one
+  /// and retry once. This is how the token is renewed mid-session.
+  Future<http.Response> _authedGet(Uri uri) async {
+    var res = await http.get(uri, headers: _authHeader);
+    if (res.statusCode == 401 && await SpotifyAuth.authorizeInteractive()) {
+      res = await http.get(uri, headers: _authHeader);
+    }
+    return res;
+  }
+
   /// The current user's Spotify id, used to keep only playlists they created.
   Future<String?> _fetchUserId() async {
     try {
-      final res = await http.get(
-        Uri.parse('https://api.spotify.com/v1/me'),
-        headers: _authHeader,
-      );
+      final res = await _authedGet(Uri.parse('https://api.spotify.com/v1/me'));
       if (res.statusCode != 200) return null;
       return json.decode(res.body)['id'] as String?;
     } catch (_) {
@@ -157,10 +163,8 @@ class SpotifyService extends ChangeNotifier {
     if (token == null) return;
     try {
       final userId = await _fetchUserId();
-      final res = await http.get(
-        Uri.parse('https://api.spotify.com/v1/me/playlists?limit=50'),
-        headers: _authHeader,
-      );
+      final res = await _authedGet(
+          Uri.parse('https://api.spotify.com/v1/me/playlists?limit=50'));
       if (res.statusCode != 200) return;
       final items = (json.decode(res.body)['items'] as List?)
               ?.cast<Map<String, dynamic>>() ??
@@ -202,10 +206,9 @@ class SpotifyService extends ChangeNotifier {
       int offset = 0;
       String? error;
       while (offset < maxTracks) {
-        final res = await http.get(
+        final res = await _authedGet(
           Uri.parse('https://api.spotify.com/v1/playlists/${playlist.id}/items'
               '?limit=$pageSize&offset=$offset'),
-          headers: _authHeader,
         );
         if (res.statusCode != 200) {
           if (offset == 0) error = _apiError(res.statusCode, res.body);
@@ -249,11 +252,8 @@ class SpotifyService extends ChangeNotifier {
     if (token == null || query.trim().isEmpty) return [];
     try {
       // Feb 2026 API: search limit max is now 10 (was 50).
-      final res = await http.get(
-        Uri.parse(
-            'https://api.spotify.com/v1/search?type=track&limit=10&q=${Uri.encodeQueryComponent(query)}'),
-        headers: _authHeader,
-      );
+      final res = await _authedGet(Uri.parse(
+          'https://api.spotify.com/v1/search?type=track&limit=10&q=${Uri.encodeQueryComponent(query)}'));
       if (res.statusCode != 200) {
         _searchError = _apiError(res.statusCode, res.body);
         return [];

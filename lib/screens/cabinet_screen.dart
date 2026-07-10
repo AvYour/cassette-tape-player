@@ -155,9 +155,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
               icon: Icons.link,
               loading: svc.isLoading,
               color: const Color(0xFF1DB954),
-              onTap: svc.isLoading
-                  ? null
-                  : () => svc.connectToSpotify(interactive: true),
+              onTap: svc.isLoading ? null : svc.connectToSpotify,
             ),
         ],
       ),
@@ -190,9 +188,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
             ),
             if (svc.isConnected && !svc.hasWebApi)
               GestureDetector(
-                onTap: svc.isLoading
-                    ? null
-                    : () => svc.connectToSpotify(interactive: true),
+                onTap: svc.isLoading ? null : svc.connectToSpotify,
                 child: Text(
                   'RETRY',
                   style: GoogleFonts.robotoMono(
