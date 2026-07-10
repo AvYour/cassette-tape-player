@@ -38,7 +38,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
     });
   }
 
-  void _openPlayer(List<CassetteTape> queue, int index) {
+  void _openPlayer(List<CassetteTape> queue, int index, String? contextUri) {
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -50,6 +50,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
             queue: queue,
             index: index,
             spotifyService: svc,
+            contextUri: contextUri,
           ),
         ),
       ),

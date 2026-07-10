@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/colors.dart';
+import '../utils/image_pick.dart';
 
 enum TapeState { stopped, playing, ff, rew }
 
@@ -10,12 +11,21 @@ class CassetteTape {
   final String albumName;
   final String year;
   final String? albumArtUrl;
+  final String? albumThumbUrl;
   final String spotifyUri;
   final Color bodyColor;
   final Color labelColor;
   final Color stripeColor;
   final int durationMs;
   final List<String> lyrics;
+
+  /// Position of this track within its source Spotify playlist (including items
+  /// we filter out, like episodes), so context playback via `skipToIndex` hits
+  /// the right track. Null for search results / demo tapes.
+  final int? contextIndex;
+
+  /// Small art for drawer spines / mini-bar; falls back to the full cover.
+  String? get thumbUrl => albumThumbUrl ?? albumArtUrl;
 
   const CassetteTape({
     required this.id,
@@ -24,20 +34,23 @@ class CassetteTape {
     this.albumName = '',
     required this.year,
     this.albumArtUrl,
+    this.albumThumbUrl,
     required this.spotifyUri,
     required this.bodyColor,
     required this.labelColor,
     required this.stripeColor,
     this.durationMs = 210000,
     required this.lyrics,
+    this.contextIndex,
   });
 
-  factory CassetteTape.fromSpotifyTrack(Map<String, dynamic> track, int index) {
+  factory CassetteTape.fromSpotifyTrack(Map<String, dynamic> track, int index,
+      {int? contextIndex}) {
     final palette = kTapePalette[index % kTapePalette.length];
     final album = track['album'] as Map<String, dynamic>? ?? {};
     final artists =
         (track['artists'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final images = (album['images'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final images = (album['images'] as List?) ?? [];
 
     final name = track['name'] as String? ?? 'Unknown Track';
     final artist = artists.isNotEmpty
@@ -52,12 +65,16 @@ class CassetteTape {
       artistName: artist,
       albumName: albumName,
       year: year,
-      albumArtUrl: images.isNotEmpty ? images[0]['url'] as String? : null,
+      // Large cover for the player body; a small one for drawer/mini-bar so we
+      // don't decode a 640px image for a 66px thumbnail.
+      albumArtUrl: ImagePick.bestUrl(images, targetWidth: 600),
+      albumThumbUrl: ImagePick.bestUrl(images, targetWidth: 160),
       spotifyUri: track['uri'] as String? ?? '',
       bodyColor: palette.body,
       labelColor: palette.label,
       stripeColor: palette.stripe,
       durationMs: (track['duration_ms'] as int?) ?? 210000,
+      contextIndex: contextIndex,
       // Spotify's Web API does not expose lyrics, so the reel shows tasteful
       // liner notes instead of pretending to scroll the song's words.
       lyrics: [

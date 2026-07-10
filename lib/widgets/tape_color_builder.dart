@@ -41,7 +41,9 @@ class _TapeColorBuilderState extends State<TapeColorBuilder> {
   }
 
   void _resolve() {
-    final url = widget.tape.albumArtUrl;
+    // Use the small thumbnail for palette extraction — decoding the full-res
+    // cover for every spine makes the drawer stutter while scrolling.
+    final url = widget.tape.thumbUrl;
     final cached = PaletteService.cached(url);
     _colors = cached ?? _fallback;
     if (cached == null && url != null && url.isNotEmpty) {

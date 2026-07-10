@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 // Palette ported one-to-one from the reference cassette UI.
-const Color kVintageInk = Color(0xFFA19385);
-const Color kActiveLyric = Color(0xFF3E2723);
+// Lyric reel: the focused line is bright cream and fades to a soft taupe for
+// distant lines (over the flowing album-color background), so it never reads
+// as a dark/muddy wash.
+const Color kVintageInk = Color(0xFFC9BEB0);
+const Color kActiveLyric = Color(0xFFF7F1E6);
 const Color kTextDark = Color(0xFF221F1C);
 
 const Color kBgCenter = Color(0xFFFAF6F0);

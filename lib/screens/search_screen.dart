@@ -223,7 +223,7 @@ class _ResultRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final art = tape.albumArtUrl;
+    final art = tape.thumbUrl;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -241,6 +241,7 @@ class _ResultRow extends StatelessWidget {
                 height: 52,
                 child: art != null && art.isNotEmpty
                     ? Image.network(art, fit: BoxFit.cover,
+                        cacheWidth: 160,
                         errorBuilder: (_, __, ___) => _placeholder())
                     : _placeholder(),
               ),

@@ -24,6 +24,7 @@ class MiniPlayerBar extends StatelessWidget {
             queue: service.nowQueue,
             index: service.nowIndex,
             spotifyService: service,
+            contextUri: service.nowContextUri,
           ),
         ),
       ),
@@ -38,7 +39,7 @@ class MiniPlayerBar extends StatelessWidget {
         final tape = service.nowPlaying;
         if (tape == null) return const SizedBox.shrink();
         final playing = service.isPlaying;
-        final art = tape.albumArtUrl;
+        final art = tape.thumbUrl;
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -76,6 +77,7 @@ class MiniPlayerBar extends StatelessWidget {
                         child: art != null && art.isNotEmpty
                             ? Image.network(art,
                                 fit: BoxFit.cover,
+                                cacheWidth: 130,
                                 errorBuilder: (_, __, ___) => _artFallback())
                             : _artFallback(),
                       ),

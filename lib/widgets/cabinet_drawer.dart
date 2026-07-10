@@ -17,7 +17,8 @@ class CabinetDrawer extends StatelessWidget {
   final bool loading;
   final List<CassetteTape>? tapes;
   final String? loadError;
-  final void Function(List<CassetteTape> queue, int index) onTapeTap;
+  final void Function(List<CassetteTape> queue, int index, String? contextUri)
+      onTapeTap;
 
   const CabinetDrawer({
     super.key,
@@ -51,7 +52,10 @@ class CabinetDrawer extends StatelessWidget {
                     loading: loading,
                     tapes: tapes,
                     loadError: loadError,
-                    onTapeTap: onTapeTap,
+                    // Inject this playlist's context so playback mirrors it in
+                    // Spotify's own queue (downstream keeps the simpler 2-arg
+                    // callback).
+                    onTapeTap: (q, i) => onTapeTap(q, i, playlist.contextUri),
                   )
                 : const SizedBox(width: double.infinity, height: 0),
           ),

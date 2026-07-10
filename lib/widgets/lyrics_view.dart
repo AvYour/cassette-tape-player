@@ -69,6 +69,15 @@ class _LyricsPainter extends CustomPainter {
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: color.withValues(alpha: alpha),
+            // Soft dark shadow on the glyphs themselves keeps the line legible
+            // over the flowing background — no white box behind it.
+            shadows: [
+              Shadow(
+                color: Colors.black.withValues(alpha: alpha * 0.5),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
+              ),
+            ],
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -83,16 +92,6 @@ class _LyricsPainter extends CustomPainter {
       canvas.scale(scale);
       canvas.translate(-tp.width / 2, -tp.height / 2);
 
-      // Soft white glow behind the active line so it reads over the flowing
-      // background — neutral, not a brown wash.
-      if (distance < 1.2) {
-        canvas.drawRect(
-          Rect.fromLTWH(0, 0, tp.width, tp.height),
-          Paint()
-            ..color = Color.fromARGB((alpha * 150).round(), 255, 255, 255)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-        );
-      }
       tp.paint(canvas, Offset.zero);
       canvas.restore();
       tp.dispose();

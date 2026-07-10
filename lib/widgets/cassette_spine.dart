@@ -61,7 +61,7 @@ class CassetteSpine extends StatelessWidget {
   }
 
   Widget _topCap() {
-    final art = tape.albumArtUrl;
+    final art = tape.thumbUrl;
     if (art != null && art.isNotEmpty) {
       return ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
@@ -71,6 +71,9 @@ class CassetteSpine extends StatelessWidget {
           child: Image.network(
             art,
             fit: BoxFit.cover,
+            // Decode at roughly the on-screen size (spine ~66px logical, up to
+            // ~3x DPR) so scrolling the drawer doesn't choke on full-res art.
+            cacheWidth: 200,
             errorBuilder: (_, __, ___) => _slotCap(),
             loadingBuilder: (context, child, progress) =>
                 progress == null ? child : _slotCap(),

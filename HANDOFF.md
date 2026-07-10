@@ -104,22 +104,41 @@ in `pubspec.yaml`. Do not delete.
 
 ## Key behaviors & gotchas
 
-### Playback (Spotify App Remote)
-- `spotify_service.playQueue(queue, index)` plays queue[index] and **queues the next ~30 tracks**
-  into Spotify so it auto-advances in order (works while backgrounded).
-- Player **follows Spotify's current track** (`_followSpotify` listener → `_followToIndex`) so the
-  cassette/lyrics/mini-bar stay in sync when Spotify advances on its own.
-- **Next/Prev** (`player_screen._skipNext/_skipPrevious`) drive our own queue via `_goToIndex`
-  (plays the target URI directly + re-queues rest) — reliable regardless of Spotify's queue.
-- **Eject** = stop + clear mini-bar. **Back** = keep playing + show mini-bar.
-- Demo mode (not connected): local timer simulation; the 5 built-in demo tapes have real URIs.
+### Playback (Spotify App Remote) — rewritten for reliability
+- `spotify_service.playQueue(queue, index)` plays **only the track's exact URI**
+  (`SpotifySdk.play(spotifyUri:)`). We do **NOT** inject the queue into Spotify (it polluted the
+  user's queue) and we do **NOT** use `skipToIndex` on a playlist context: Spotify's playable
+  context order can differ from the Web API item order (unavailable/local "ghost" tracks), so an
+  index maps to the WRONG song. Playing the URI is unambiguous.
+- **Auto-advance is driven by us**, in demo AND connected mode: the tick detects end-of-track via
+  `PlaybackMath.reachedEnd` and calls `_advanceToNext` (a single URI won't auto-advance in Spotify).
+- Tapping a cassette **auto-plays** it (no separate PLAY press); `_goToIndex` handles play + state.
+- Player **follows Spotify's current track** (`_followSpotify`) only once THIS screen is driving
+  playback (`_audioStarted`) and outside a self-change guard window (`_ignoreFollowUntil`, ~2–3s)
+  — otherwise a stale/old URI would bounce the display to the wrong tape.
+- **Next/Prev** drive our own queue via `_goToIndex`. **Eject** = stop + clear mini-bar.
+  **Back** = keep playing + show mini-bar.
+- Playlist loading filters out **episodes and `is_playable == false` ghosts** (`market=from_token`
+  makes Spotify populate `is_playable`); see `utils/playlist_paging.dart`.
 
 ### Position / lyrics sync (important)
 - Playback position is **anchored to wall-clock time** (`_anchor`, `_anchorWall`), NOT tick
   accumulation — so it stays correct while the app (ticker) is backgrounded.
-- Position is re-synced by **polling `getPlayerState` every ~3s** (subscription events carry a
-  STALE position, so we don't trust them for anchoring) and on resume/reopen.
-- Synced lyrics (lrclib LRC) map `_positionMs` → line by timestamp.
+- Position is re-synced by **polling `getPlayerState`** — but only when `PlaybackMath.shouldReanchorPoll`
+  allows (every ~3s AND past the self-change guard). Polling right after a self-driven track change
+  would anchor to the OLD track's stale position and cascade-skip tracks.
+- Synced lyrics (lrclib LRC) map `_positionMs` → line by timestamp, nudged by `_lyricLagMs` (~300ms)
+  so lines land as they're sung. The per-frame lookup uses `PlaybackMath.lyricLineIndex` with a
+  forward-scan hint (cheap). Lyrics are **cached** (`LyricsService` + `utils/lru_cache.dart`, incl.
+  negative caching) so reopening a tape is instant.
+
+### Performance notes
+- Pure playback/lyric maths live in `utils/playback_math.dart` (unit-tested in `test/`).
+- Thumbnails: `CassetteTape.albumThumbUrl` (small Spotify image via `utils/image_pick.dart`) +
+  `cacheWidth` on drawer/mini-bar/search images, and palette extraction uses the thumb — so
+  scrolling the drawer doesn't decode 640px covers per spine.
+- Spotify player-state subscription is single (cancelled before re-subscribe) and only
+  `notifyListeners()` when the track/paused state actually changes.
 
 ### Auth / token (current = implicit grant)
 - Uses `SpotifySdk.getAccessToken` (implicit grant, native SDK flow — custom scheme is fine).

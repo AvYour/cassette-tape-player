@@ -16,6 +16,11 @@ class Playlist {
   bool loading = false;
   String? loadError; // set when a load returns no usable tapes
 
+  /// The Spotify context URI for this playlist. Playing this (via
+  /// `skipToIndex`) makes Spotify's own queue BE the playlist — like Spotify —
+  /// instead of us injecting individual tracks into the user's queue.
+  String get contextUri => 'spotify:playlist:$id';
+
   Playlist({
     required this.id,
     required this.name,

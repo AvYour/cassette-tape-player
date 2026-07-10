@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../utils/lru_cache.dart';
 
 /// Lyrics for a track: plain lines, optionally with per-line timestamps for
 /// synced (karaoke-style) scrolling.
@@ -15,9 +16,39 @@ class Lyrics {
 
 /// Fetches lyrics from lrclib.net — a free, key-less, open lyrics database.
 class LyricsService {
+  /// In-memory cache so reopening a tape is instant and misses aren't refetched
+  /// (negative caching). Bounded so a long session can't grow without limit.
+  static final LruCache<Lyrics?> _cache = LruCache<Lyrics?>(capacity: 200);
+
+  /// Stable cache key for a track lookup.
+  static String cacheKey({
+    required String track,
+    required String artist,
+    String album = '',
+    int durationMs = 0,
+  }) =>
+      '${track.trim().toLowerCase()}|${artist.trim().toLowerCase()}'
+      '|${album.trim().toLowerCase()}|${durationMs ~/ 1000}';
+
   /// Looks up lyrics for a track. Prefers synced lyrics, falls back to plain.
-  /// Returns null when nothing is found.
+  /// Returns null when nothing is found. Results (including misses) are cached.
   static Future<Lyrics?> fetch({
+    required String track,
+    required String artist,
+    String album = '',
+    int durationMs = 0,
+  }) async {
+    final key = cacheKey(
+        track: track, artist: artist, album: album, durationMs: durationMs);
+    if (_cache.containsKey(key)) return _cache.get(key);
+
+    final result = await _fetchRemote(
+        track: track, artist: artist, album: album, durationMs: durationMs);
+    _cache.put(key, result);
+    return result;
+  }
+
+  static Future<Lyrics?> _fetchRemote({
     required String track,
     required String artist,
     String album = '',

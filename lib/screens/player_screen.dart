@@ -9,6 +9,7 @@ import '../services/lyrics_service.dart';
 import '../services/sound_service.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
+import '../utils/playback_math.dart';
 import '../widgets/cassette_tape_view.dart';
 import '../widgets/eject_button.dart';
 import '../widgets/lyrics_view.dart';
@@ -25,11 +26,17 @@ class PlayerScreen extends StatefulWidget {
   final int index;
   final SpotifyService spotifyService;
 
+  /// Spotify context URI (e.g. a playlist) this queue came from. When set,
+  /// playback uses it so Spotify's queue mirrors the playlist instead of us
+  /// injecting tracks. Null for search results / demo.
+  final String? contextUri;
+
   const PlayerScreen({
     super.key,
     required this.queue,
     required this.index,
     required this.spotifyService,
+    this.contextUri,
   });
 
   /// Convenience for a single tape with no auto-advance queue.
@@ -74,6 +81,11 @@ class _PlayerScreenState extends State<PlayerScreen>
   DateTime _anchorWall = DateTime.now();
   DateTime _lastPoll = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // After we drive a track change ourselves (next/prev/auto-advance), Spotify
+  // keeps reporting the OLD track for a moment. Ignore _followSpotify until
+  // this time so it doesn't bounce the display back to the previous tape.
+  DateTime _ignoreFollowUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
   /// Re-anchor the position estimate to [posMs] as of now.
   void _anchor(double posMs) {
     _anchorPosMs = posMs;
@@ -84,6 +96,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   // Lyrics: liner notes by default, replaced by lrclib results when found.
   late List<String> _lyrics = _tape.lyrics;
   List<int>? _lyricTimesMs; // set when synced lyrics are available
+  int _lyricLineHint = 0; // last active line, to scan forward from each frame
 
   @override
   void initState() {
@@ -96,7 +109,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     // Reopened (e.g. from the mini-player) while this tape is already playing:
     // resume the visuals in sync instead of starting from stopped.
     final svc = widget.spotifyService;
-    if (svc.isConnected && svc.nowPlaying?.id == _tape.id && svc.isPlaying) {
+    final resumingSame =
+        svc.isConnected && svc.nowPlaying?.id == _tape.id && svc.isPlaying;
+    if (resumingSame) {
+      // Reopened (e.g. from the mini-player) while already playing: resume the
+      // visuals in sync instead of restarting the track.
       _tapeState = TapeState.playing;
       _audioStarted = true;
       svc.fetchPositionMs().then((ms) {
@@ -104,7 +121,12 @@ class _PlayerScreenState extends State<PlayerScreen>
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.spotifyService.setNowPlaying(widget.queue, _index);
+      widget.spotifyService
+          .setNowPlaying(widget.queue, _index, contextUri: widget.contextUri);
+      // Auto-play a freshly-opened tape so tapping a cassette just plays it,
+      // with no separate PLAY press. (Skip when resuming the tape that's
+      // already playing.)
+      if (!resumingSame) _goToIndex(_index);
     });
   }
 
@@ -147,14 +169,18 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
     _anchor(0);
     _lastPoll = DateTime.fromMillisecondsSinceEpoch(0);
+    _ignoreFollowUntil = DateTime.now().add(const Duration(seconds: 3));
     _speedMul = 0;
     _lyricProgress.value = 0;
+    _lyricLineHint = 0;
     _audioStarted = true;
     SoundService.tapeStart();
     // Play this tape and re-hand the following tracks to Spotify so background
     // auto-advance still works after a manual skip.
-    widget.spotifyService.playQueue(widget.queue, _index);
-    widget.spotifyService.setNowPlaying(widget.queue, _index);
+    widget.spotifyService
+        .playQueue(widget.queue, _index, contextUri: widget.contextUri);
+    widget.spotifyService
+        .setNowPlaying(widget.queue, _index, contextUri: widget.contextUri);
     _fetchLyrics();
   }
 
@@ -184,6 +210,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (_positionMs > 3000 || _index == 0) {
       _anchor(0);
       _lyricProgress.value = 0;
+      _lyricLineHint = 0;
       if (widget.spotifyService.isConnected) widget.spotifyService.seekTo(0);
     } else {
       _goToIndex(_index - 1);
@@ -205,6 +232,12 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _followSpotify() {
     final svc = widget.spotifyService;
     if (!svc.isConnected) return;
+    // Only follow once THIS screen is driving playback. Otherwise, opening a
+    // fresh tape while another one is still playing would hijack the display to
+    // whatever Spotify happens to be playing (showing the wrong cassette).
+    if (!_audioStarted) return;
+    // Don't react while our own just-issued change is still settling in Spotify.
+    if (DateTime.now().isBefore(_ignoreFollowUntil)) return;
     final uri = svc.currentTrackUri;
     if (uri == null || uri.isEmpty || uri == _tape.spotifyUri) return;
     final idx = widget.queue.indexWhere((t) => t.spotifyUri == uri);
@@ -223,11 +256,14 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
     _anchor(0);
     _lastPoll = DateTime.fromMillisecondsSinceEpoch(0);
+    _ignoreFollowUntil = DateTime.now().add(const Duration(seconds: 2));
     _speedMul = 0;
     _lyricProgress.value = 0;
+    _lyricLineHint = 0;
     _audioStarted = true;
     SoundService.tapeStart();
-    widget.spotifyService.setNowPlaying(widget.queue, _index);
+    widget.spotifyService
+        .setNowPlaying(widget.queue, _index, contextUri: widget.contextUri);
     _fetchLyrics();
   }
 
@@ -250,8 +286,9 @@ class _PlayerScreenState extends State<PlayerScreen>
       case TapeState.playing:
         if (!_audioStarted) {
           _audioStarted = true;
-          svc.playQueue(widget.queue, _index);
-          svc.setNowPlaying(widget.queue, _index);
+          svc.playQueue(widget.queue, _index, contextUri: widget.contextUri);
+          svc.setNowPlaying(widget.queue, _index,
+              contextUri: widget.contextUri);
         } else {
           // Resume at the (possibly scrubbed) position.
           svc.seekTo(_positionMs.round());
@@ -301,15 +338,37 @@ class _PlayerScreenState extends State<PlayerScreen>
     _updatePosition(dt);
     _updateLyricProgress();
 
-    // In demo mode we advance the queue ourselves; when connected, Spotify
-    // advances its own queue and _followSpotify keeps the display in sync.
-    final dur = _tape.durationMs.toDouble();
-    if (!widget.spotifyService.isConnected &&
-        _tapeState == TapeState.playing &&
-        dur > 1000 &&
-        _positionMs >= dur - 250) {
+    // We drive auto-advance ourselves in both demo AND connected mode: playback
+    // uses a single track URI (no Spotify context), so Spotify won't advance on
+    // its own when a track ends.
+    if (_tapeState == TapeState.playing &&
+        PlaybackMath.reachedEnd(_positionMs, _tape.durationMs)) {
       _advanceToNext();
     }
+  }
+
+  // The synced lyrics were landing a touch early; nudge the reel to lag the
+  // audio slightly so a line highlights as it's sung, not just before. Tune
+  // here if it drifts.
+  static const double _lyricLagMs = 200;
+
+  /// Places the lyric reel from [_positionMs], reusing the tested pure helper
+  /// and a forward-scanning hint so it stays cheap on the per-frame path.
+  void _updateLyricProgress() {
+    final lyricPos =
+        (_positionMs - _lyricLagMs).clamp(0.0, _tape.durationMs.toDouble());
+    final times = _lyricTimesMs;
+    if (times != null && times.length == _lyrics.length) {
+      _lyricLineHint =
+          PlaybackMath.lyricLineIndex(times, lyricPos, hint: _lyricLineHint);
+    }
+    _lyricProgress.value = PlaybackMath.lyricProgress(
+      lyricPos,
+      times,
+      _lyrics.length,
+      _tape.durationMs,
+      hint: _lyricLineHint,
+    );
   }
 
   /// Keeps [_positionMs] in step with playback: snap to Spotify events (which
@@ -324,7 +383,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     // Wall-clock interpolation covers the gaps between polls.
     if (svc.isConnected &&
         _tapeState == TapeState.playing &&
-        DateTime.now().difference(_lastPoll).inMilliseconds > 3000) {
+        PlaybackMath.shouldReanchorPoll(
+          now: DateTime.now(),
+          lastPoll: _lastPoll,
+          ignoreUntil: _ignoreFollowUntil,
+        )) {
       _lastPoll = DateTime.now();
       svc.fetchPositionMs().then((ms) {
         if (ms != null && mounted && _tapeState == TapeState.playing) {
@@ -338,38 +401,14 @@ class _PlayerScreenState extends State<PlayerScreen>
         // Derive from wall clock so backgrounded time is included.
         final elapsed =
             DateTime.now().difference(_anchorWall).inMilliseconds.toDouble();
-        _positionMs = (_anchorPosMs + elapsed).clamp(0.0, dur);
+        _positionMs =
+            PlaybackMath.interpolatePosition(_anchorPosMs, elapsed, dur);
       case TapeState.ff:
         _anchor((_positionMs + dt * 1000 * 8).clamp(0.0, dur));
       case TapeState.rew:
         _anchor((_positionMs - dt * 1000 * 8).clamp(0.0, dur));
       case TapeState.stopped:
         _anchor(_positionMs);
-    }
-  }
-
-  /// Places the lyric reel from [_positionMs] (synced or proportional).
-  void _updateLyricProgress() {
-    final lineCount = _lyrics.length;
-    if (lineCount == 0) return;
-    final maxProgress = (lineCount - 1).toDouble();
-    final times = _lyricTimesMs;
-
-    if (times != null && times.length == lineCount) {
-      int i = 0;
-      while (i < times.length - 1 && times[i + 1] <= _positionMs) {
-        i++;
-      }
-      double frac = 0;
-      if (i < times.length - 1) {
-        final span = times[i + 1] - times[i];
-        if (span > 0) frac = ((_positionMs - times[i]) / span).clamp(0.0, 1.0);
-      }
-      _lyricProgress.value = (i + frac).clamp(0.0, maxProgress);
-    } else {
-      final dur = _tape.durationMs.toDouble();
-      final ratio = dur > 0 ? _positionMs / dur : 0.0;
-      _lyricProgress.value = (ratio * maxProgress).clamp(0.0, maxProgress);
     }
   }
 

@@ -6,6 +6,7 @@ import 'package:spotify_sdk/spotify_sdk.dart';
 import 'package:spotify_sdk/models/player_state.dart';
 import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
+import '../utils/playlist_paging.dart';
 import 'spotify_auth.dart';
 
 class SpotifyService extends ChangeNotifier {
@@ -14,6 +15,16 @@ class SpotifyService extends ChangeNotifier {
   final List<CassetteTape> _tapes = CassetteTape.demoTapes;
   List<Playlist> _playlists = [];
   PlayerState? _playerState;
+
+  // Single live subscription to Spotify's player state. Kept so we can cancel
+  // it before re-subscribing (otherwise every reconnect stacks another stream,
+  // multiplying notifyListeners() and rebuilds — a major source of jank).
+  StreamSubscription<PlayerState>? _playerSub;
+  // Last values we notified on, so a stream event only triggers a rebuild when
+  // something the UI cares about (track or play/pause) actually changed — not
+  // on every position tick Spotify emits.
+  String? _lastNotifiedUri;
+  bool? _lastNotifiedPaused;
 
   // --- Demo playback simulation (used when not connected to Spotify) ---
   Timer? _demoTimer;
@@ -30,14 +41,17 @@ class SpotifyService extends ChangeNotifier {
   CassetteTape? _nowPlaying;
   List<CassetteTape> _nowQueue = const [];
   int _nowIndex = 0;
+  String? _nowContextUri;
 
   CassetteTape? get nowPlaying => _nowPlaying;
   List<CassetteTape> get nowQueue => _nowQueue;
   int get nowIndex => _nowIndex;
+  String? get nowContextUri => _nowContextUri;
 
-  void setNowPlaying(List<CassetteTape> queue, int index) {
+  void setNowPlaying(List<CassetteTape> queue, int index, {String? contextUri}) {
     _nowQueue = queue;
     _nowIndex = index;
+    _nowContextUri = contextUri;
     _nowPlaying = (index >= 0 && index < queue.length) ? queue[index] : null;
     notifyListeners();
   }
@@ -123,9 +137,21 @@ class SpotifyService extends ChangeNotifier {
   }
 
   void _subscribeToPlayerState() {
-    SpotifySdk.subscribePlayerState().listen((state) {
+    // Drop any previous subscription so reconnects don't stack streams.
+    _playerSub?.cancel();
+    _lastNotifiedUri = null;
+    _lastNotifiedPaused = null;
+    _playerSub = SpotifySdk.subscribePlayerState().listen((state) {
       _playerState = state;
-      notifyListeners();
+      // Only rebuild listeners when the track or the play/pause state changes;
+      // Spotify emits frequent position updates we don't need to react to.
+      final uri = state.track?.uri;
+      final paused = state.isPaused;
+      if (uri != _lastNotifiedUri || paused != _lastNotifiedPaused) {
+        _lastNotifiedUri = uri;
+        _lastNotifiedPaused = paused;
+        notifyListeners();
+      }
     });
   }
 
@@ -207,8 +233,10 @@ class SpotifyService extends ChangeNotifier {
       String? error;
       while (offset < maxTracks) {
         final res = await _authedGet(
+          // market=from_token relative-links the user's market so Spotify sets
+          // `is_playable`, letting us drop tracks that have gone unplayable.
           Uri.parse('https://api.spotify.com/v1/playlists/${playlist.id}/items'
-              '?limit=$pageSize&offset=$offset'),
+              '?limit=$pageSize&offset=$offset&market=from_token'),
         );
         if (res.statusCode != 200) {
           if (offset == 0) error = _apiError(res.statusCode, res.body);
@@ -216,18 +244,9 @@ class SpotifyService extends ChangeNotifier {
         }
         final body = json.decode(res.body) as Map<String, dynamic>;
         final items = (body['items'] as List?) ?? [];
-        for (final item in items) {
-          if (item is! Map) continue;
-          // Feb 2026: the track lives under 'item' ('track' is deprecated).
-          final raw = item['item'] ?? item['track'];
-          if (raw is Map<String, dynamic> &&
-              raw['id'] != null &&
-              raw['type'] != 'episode') {
-            try {
-              tapes.add(CassetteTape.fromSpotifyTrack(raw, tapes.length));
-            } catch (_) {}
-          }
-        }
+        // Tag each track with its TRUE playlist position so context playback
+        // (skipToIndex) isn't thrown off by filtered-out items (episodes/nulls).
+        tapes.addAll(PlaylistPaging.tapesFromPage(items, pageOffset: offset));
         if (items.length < pageSize || body['next'] == null) break;
         offset += pageSize;
       }
@@ -291,10 +310,16 @@ class SpotifyService extends ChangeNotifier {
     }
   }
 
-  /// Play [queue] starting at [index] and hand the following tracks to Spotify's
-  /// own queue, so Spotify advances through them in order — even while the app
-  /// is backgrounded — instead of falling back to its autoplay recommendations.
-  Future<void> playQueue(List<CassetteTape> queue, int index) async {
+  /// Play [queue] at [index] by playing the track's exact Spotify URI.
+  ///
+  /// We deliberately do NOT inject the rest of the queue into Spotify (that
+  /// polluted the user's queue) and we do NOT use `skipToIndex` on a playlist
+  /// context: Spotify's playable context order can differ from the Web API item
+  /// order (unavailable/local tracks), so an index maps to the wrong song.
+  /// Playing the URI is unambiguous; the app drives next/auto-advance itself.
+  /// [contextUri] is accepted for call-site symmetry but not needed here.
+  Future<void> playQueue(List<CassetteTape> queue, int index,
+      {String? contextUri}) async {
     if (index < 0 || index >= queue.length) return;
     if (!_isConnected) {
       await playTape(queue[index]);
@@ -302,16 +327,9 @@ class SpotifyService extends ChangeNotifier {
     }
     final start = queue[index];
     if (start.spotifyUri.isEmpty) return;
-    await SpotifySdk.play(spotifyUri: start.spotifyUri);
-    // Queue the next tracks (cap so we don't spam the API on huge playlists).
-    final end = (index + 1 + 30).clamp(0, queue.length);
-    for (int i = index + 1; i < end; i++) {
-      final uri = queue[i].spotifyUri;
-      if (uri.isEmpty) continue;
-      try {
-        await SpotifySdk.queue(spotifyUri: uri);
-      } catch (_) {}
-    }
+    try {
+      await SpotifySdk.play(spotifyUri: start.spotifyUri);
+    } catch (_) {}
   }
 
   Future<void> pause() async {
@@ -398,6 +416,7 @@ class SpotifyService extends ChangeNotifier {
   @override
   void dispose() {
     _demoTimer?.cancel();
+    _playerSub?.cancel();
     super.dispose();
   }
 }
