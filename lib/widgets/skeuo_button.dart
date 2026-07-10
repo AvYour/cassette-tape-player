@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
+import '../services/sound_service.dart';
 import '../utils/colors.dart';
 
 /// Transport control glyphs for the skeuomorphic button panel.
@@ -77,7 +78,7 @@ class _SkeuoButtonState extends State<SkeuoButton>
                 ? (_) {
                     _pressed = true;
                     HapticFeedback.lightImpact();
-                    SystemSound.play(SystemSoundType.click);
+                    SoundService.buttonPress();
                     _settle();
                   }
                 : null,
