@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../painters/wood_painter.dart';
 import '../services/spotify_service.dart';
 import '../utils/vu_motion.dart';
+import 'vu_meter.dart';
 
 /// The desk of the 1985 room: floorboards under a wooden desktop carrying the
 /// tape deck (the room's living now-playing — reels turn, VU needles dance;
@@ -298,15 +299,9 @@ class _TapeDeckState extends State<_TapeDeck>
                             return Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                CustomPaint(
-                                  size: const Size(46, 25),
-                                  painter: _VuPainter(deflection: l),
-                                ),
+                                VuMeter(deflection: l),
                                 const SizedBox(height: 4),
-                                CustomPaint(
-                                  size: const Size(46, 25),
-                                  painter: _VuPainter(deflection: r),
-                                ),
+                                VuMeter(deflection: r),
                               ],
                             );
                           },
@@ -322,79 +317,6 @@ class _TapeDeckState extends State<_TapeDeck>
       },
     );
   }
-}
-
-/// One small VU meter: cream face, tick arc with a red zone, and a needle
-/// pivoting from the bottom edge.
-class _VuPainter extends CustomPainter {
-  final double deflection;
-
-  const _VuPainter({required this.deflection});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final face =
-        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(3));
-    canvas.drawRRect(
-      face,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF2E9D4), Color(0xFFD8C7A0)],
-        ).createShader(Offset.zero & size),
-    );
-    canvas.drawRRect(
-      face,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = Colors.black.withValues(alpha: 0.55),
-    );
-
-    final pivot = Offset(size.width / 2, size.height - 2);
-    const start = -2.35; // needle sweep, radians (leftmost)
-    const sweep = 1.55; // to rightmost
-
-    // Scale ticks along the arc; the last third is the red zone.
-    for (var i = 0; i <= 6; i++) {
-      final f = i / 6;
-      final a = start + sweep * f;
-      final outer = pivot + Offset.fromDirection(a, size.height - 6);
-      final inner = pivot + Offset.fromDirection(a, size.height - 9.5);
-      canvas.drawLine(
-        inner,
-        outer,
-        Paint()
-          ..strokeWidth = 1
-          ..color = f > 0.66
-              ? const Color(0xFFB33A2C)
-              : Colors.black.withValues(alpha: 0.6),
-      );
-    }
-
-    // The needle.
-    final angle = start + sweep * deflection.clamp(0.0, 1.0);
-    canvas.drawLine(
-      pivot,
-      pivot + Offset.fromDirection(angle, size.height - 5),
-      Paint()
-        ..strokeWidth = 1.3
-        ..color = const Color(0xFF7E241B),
-    );
-    canvas.drawCircle(pivot, 1.8, Paint()..color = const Color(0xFF3A3733));
-
-    // Glass glare.
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Rect.fromLTWH(2, 2, size.width - 4, size.height * 0.32),
-          const Radius.circular(2)),
-      Paint()..color = Colors.white.withValues(alpha: 0.10),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_VuPainter old) => old.deflection != deflection;
 }
 
 /// A small deck reel that turns while the music plays.

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
 import '../painters/cassette_tape_painter.dart';
@@ -10,7 +11,9 @@ import '../services/sound_service.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../utils/playback_math.dart';
+import '../utils/scrub_math.dart';
 import '../utils/tape_wind.dart';
+import '../utils/vu_motion.dart';
 import '../widgets/cassette_tape_view.dart';
 import '../widgets/eject_button.dart';
 import '../widgets/lyrics_view.dart';
@@ -18,6 +21,7 @@ import '../widgets/skeuo_button.dart';
 import '../widgets/title_header.dart';
 import '../widgets/dynamic_background.dart';
 import '../widgets/volume_tuner.dart';
+import '../widgets/vu_meter.dart';
 
 /// The tape player screen: eject bar, J-card marquee header, the cassette,
 /// scrolling lyrics and the skeuomorphic component panel — a port of the
@@ -88,6 +92,17 @@ class _PlayerScreenState extends State<PlayerScreen>
   // keeps reporting the OLD track for a moment. Ignore _followSpotify until
   // this time so it doesn't bounce the display back to the previous tape.
   DateTime _ignoreFollowUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Scrubbing: dragging horizontally on the cassette winds the tape (one
+  // cassette-width = the whole track). While active, the drag owns the
+  // position; Spotify is sought once on release.
+  double? _scrubStartMs;
+  double _scrubDx = 0;
+  double _cassetteW = 1;
+  bool get _scrubbing => _scrubStartMs != null;
+
+  // Clock (seconds) for the VU needles; -1 while not playing (needles rest).
+  final ValueNotifier<double> _vuSeconds = ValueNotifier(-1);
 
   /// Re-anchor the position estimate to [posMs] as of now.
   void _anchor(double posMs) {
@@ -228,6 +243,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _angles.dispose();
     _lyricProgress.dispose();
     _trackProgress.dispose();
+    _vuSeconds.dispose();
     super.dispose();
   }
 
@@ -307,6 +323,42 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
+  // --- Scrubbing by dragging the cassette -------------------------------
+
+  void _scrubStart(DragStartDetails d) {
+    HapticFeedback.selectionClick();
+    _scrubStartMs = _positionMs;
+    _scrubDx = 0;
+  }
+
+  void _scrubUpdate(DragUpdateDetails d) {
+    if (!_scrubbing) return;
+    _scrubDx += d.delta.dx;
+    _positionMs = ScrubMath.positionAfterDrag(
+      startMs: _scrubStartMs!,
+      dragDx: _scrubDx,
+      trackWidth: _cassetteW,
+      durationMs: _tape.durationMs,
+    );
+    _anchor(_positionMs);
+    // The reels wind under the finger.
+    final deg = d.delta.dx * 0.9;
+    _left += deg;
+    _right += deg;
+    _angles.update(_left, _right);
+  }
+
+  void _scrubEnd([Object? _]) {
+    if (!_scrubbing) return;
+    _scrubStartMs = null;
+    HapticFeedback.selectionClick();
+    // Give Spotify a beat before trusting its position again, or a stale
+    // report would snap the tape back to where it was.
+    _ignoreFollowUntil = DateTime.now().add(const Duration(seconds: 2));
+    _lastPoll = DateTime.now();
+    widget.spotifyService.seekTo(_positionMs.round());
+  }
+
   void _eject() {
     // Eject stops playback for good and clears the mini-player.
     SoundService.eject();
@@ -349,10 +401,18 @@ class _PlayerScreenState extends State<PlayerScreen>
     _updatePosition(dt);
     _updateLyricProgress();
 
+    // Feed the VU needles while playing (rest at -1 otherwise).
+    if (_tapeState == TapeState.playing) {
+      _vuSeconds.value = seconds;
+    } else if (_vuSeconds.value >= 0) {
+      _vuSeconds.value = -1;
+    }
+
     // We drive auto-advance ourselves in both demo AND connected mode: playback
     // uses a single track URI (no Spotify context), so Spotify won't advance on
-    // its own when a track ends.
-    if (_tapeState == TapeState.playing &&
+    // its own when a track ends. (Not while the finger is winding the tape.)
+    if (!_scrubbing &&
+        _tapeState == TapeState.playing &&
         PlaybackMath.reachedEnd(_positionMs, _tape.durationMs)) {
       _advanceToNext();
     }
@@ -361,7 +421,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   // The synced lyrics were landing a touch early; nudge the reel to lag the
   // audio slightly so a line highlights as it's sung, not just before. Tune
   // here if it drifts.
-  static const double _lyricLagMs = 200;
+  static const double _lyricLagMs = 0;
 
   /// Places the lyric reel from [_positionMs], reusing the tested pure helper
   /// and a forward-scanning hint so it stays cheap on the per-frame path.
@@ -393,6 +453,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     // (subscription events carry a stale position, so we don't trust them).
     // Wall-clock interpolation covers the gaps between polls.
     if (svc.isConnected &&
+        !_scrubbing &&
         _tapeState == TapeState.playing &&
         PlaybackMath.shouldReanchorPoll(
           now: DateTime.now(),
@@ -407,19 +468,24 @@ class _PlayerScreenState extends State<PlayerScreen>
       });
     }
 
-    switch (_tapeState) {
-      case TapeState.playing:
-        // Derive from wall clock so backgrounded time is included.
-        final elapsed =
-            DateTime.now().difference(_anchorWall).inMilliseconds.toDouble();
-        _positionMs =
-            PlaybackMath.interpolatePosition(_anchorPosMs, elapsed, dur);
-      case TapeState.ff:
-        _anchor((_positionMs + dt * 1000 * 8).clamp(0.0, dur));
-      case TapeState.rew:
-        _anchor((_positionMs - dt * 1000 * 8).clamp(0.0, dur));
-      case TapeState.stopped:
-        _anchor(_positionMs);
+    if (_scrubbing) {
+      // The finger owns the position while winding.
+      _anchor(_positionMs);
+    } else {
+      switch (_tapeState) {
+        case TapeState.playing:
+          // Derive from wall clock so backgrounded time is included.
+          final elapsed =
+              DateTime.now().difference(_anchorWall).inMilliseconds.toDouble();
+          _positionMs =
+              PlaybackMath.interpolatePosition(_anchorPosMs, elapsed, dur);
+        case TapeState.ff:
+          _anchor((_positionMs + dt * 1000 * 8).clamp(0.0, dur));
+        case TapeState.rew:
+          _anchor((_positionMs - dt * 1000 * 8).clamp(0.0, dur));
+        case TapeState.stopped:
+          _anchor(_positionMs);
+      }
     }
 
     _trackProgress.value = dur > 0 ? (_positionMs / dur).clamp(0.0, 1.0) : 0.0;
@@ -479,14 +545,27 @@ class _PlayerScreenState extends State<PlayerScreen>
               const SizedBox(height: 24),
               FractionallySizedBox(
                 widthFactor: 0.9,
-                child: Hero(
-                  tag: 'tape_${_tape.id}',
-                  flightShuttleBuilder: cassetteFlightShuttle(_tape),
-                  child: _PlayerCassette(
-                    tape: _tape,
-                    angles: _angles,
-                    progress: _trackProgress,
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, cons) {
+                    _cassetteW = cons.maxWidth;
+                    // Drag across the cassette to wind the tape: one full
+                    // width travels the whole track; release to seek there.
+                    return GestureDetector(
+                      onHorizontalDragStart: _scrubStart,
+                      onHorizontalDragUpdate: _scrubUpdate,
+                      onHorizontalDragEnd: _scrubEnd,
+                      onHorizontalDragCancel: _scrubEnd,
+                      child: Hero(
+                        tag: 'tape_${_tape.id}',
+                        flightShuttleBuilder: cassetteFlightShuttle(_tape),
+                        child: _PlayerCassette(
+                          tape: _tape,
+                          angles: _angles,
+                          progress: _trackProgress,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 24),
@@ -556,12 +635,38 @@ class _PlayerScreenState extends State<PlayerScreen>
                 SizedBox(
                   height: 56,
                   width: double.infinity,
-                  child: VintageVolumeTuner(
-                    volume: _volume,
-                    onChanged: (v) {
-                      setState(() => _volume = v);
-                      widget.spotifyService.setVolume((v * 100).round());
-                    },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: VintageVolumeTuner(
+                          volume: _volume,
+                          onChanged: (v) {
+                            setState(() => _volume = v);
+                            widget.spotifyService.setVolume((v * 100).round());
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Stereo VU meters riding the music.
+                      ValueListenableBuilder<double>(
+                        valueListenable: _vuSeconds,
+                        builder: (context, t, _) {
+                          final on = t >= 0;
+                          return Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              VuMeter(
+                                  deflection: on ? VuMotion.deflection(t) : 0),
+                              const SizedBox(height: 4),
+                              VuMeter(
+                                  deflection: on
+                                      ? VuMotion.deflection(t, phase: 0.9)
+                                      : 0),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 20),
