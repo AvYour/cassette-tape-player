@@ -1,7 +1,7 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/playlist.dart';
+import '../painters/wood_painter.dart';
 
 /// A filing-cabinet drawer representing one playlist, meant to sit flush
 /// inside the cabinet carcass (see `_CabinetBody` in the cabinet screen). The
@@ -106,11 +106,14 @@ class _DrawerFace extends StatelessWidget {
           ),
           child: Stack(
             children: [
-              // Wood grain + bevel.
+              // Varnished timber finish (grain unique to this drawer, sheen,
+              // bevelled edges) over the animated base gradient.
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(5),
-                  child: CustomPaint(painter: WoodGrainPainter()),
+                  child: CustomPaint(
+                    painter: WoodPainter(seed: playlist.id.hashCode),
+                  ),
                 ),
               ),
               Padding(
@@ -339,36 +342,4 @@ class _CupHandle extends StatelessWidget {
           ),
         ),
       );
-}
-
-/// Paints warm wood tones with faint horizontal grain and a top bevel. Public
-/// so the cabinet carcass (cabinet screen) shares the same timber.
-class WoodGrainPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rnd = math.Random(7);
-    final grain = Paint()
-      ..strokeWidth = 1
-      ..color = Colors.black.withValues(alpha: 0.05);
-    for (double y = 4; y < size.height; y += 5) {
-      final wobble = (rnd.nextDouble() - 0.5) * 3;
-      final path = Path()
-        ..moveTo(0, y)
-        ..quadraticBezierTo(
-            size.width / 2, y + wobble, size.width, y + wobble * 0.4);
-      canvas.drawPath(path, grain);
-    }
-    // Top bevel highlight and bottom shade.
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, 2),
-      Paint()..color = Colors.white.withValues(alpha: 0.14),
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(0, size.height - 3, size.width, 3),
-      Paint()..color = Colors.black.withValues(alpha: 0.2),
-    );
-  }
-
-  @override
-  bool shouldRepaint(WoodGrainPainter old) => false;
 }

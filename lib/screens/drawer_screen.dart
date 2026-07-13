@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/playlist.dart';
+import '../painters/wood_painter.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../utils/grid_math.dart';
@@ -174,14 +175,7 @@ class _DrawerScreenState extends State<DrawerScreen>
   Widget _buildDrawer() {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        // Wooden rim.
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF7C5537), Color(0xFF5E3E27)],
-        ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -192,27 +186,51 @@ class _DrawerScreenState extends State<DrawerScreen>
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(9),
-        child: Container(
-          decoration: const BoxDecoration(
-            // Felt interior.
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF2A1C12), Color(0xFF382515)],
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            // Varnished timber rim, same wood as the cabinet body.
+            const Positioned.fill(
+              child: CustomPaint(
+                painter: WoodPainter(
+                  light: Color(0xFF7C5537),
+                  dark: Color(0xFF5E3E27),
+                  seed: 13,
+                ),
+              ),
             ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: _buildFelt(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFelt() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(9),
+      child: Container(
+        decoration: const BoxDecoration(
+          // Felt interior.
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF2A1C12), Color(0xFF382515)],
           ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _buildContent(),
-              // Inner walls shading all four sides for depth.
-              _innerShadow(Alignment.topCenter, Alignment.bottomCenter, 26),
-              _innerShadow(Alignment.bottomCenter, Alignment.topCenter, 26),
-              _innerShadowSide(left: true),
-              _innerShadowSide(left: false),
-            ],
-          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildContent(),
+            // Inner walls shading all four sides for depth.
+            _innerShadow(Alignment.topCenter, Alignment.bottomCenter, 26),
+            _innerShadow(Alignment.bottomCenter, Alignment.topCenter, 26),
+            _innerShadowSide(left: true),
+            _innerShadowSide(left: false),
+          ],
         ),
       ),
     );

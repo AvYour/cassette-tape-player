@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/playlist.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
+import '../painters/wood_painter.dart';
 import '../widgets/cabinet_drawer.dart';
 import '../widgets/mini_player_bar.dart';
 import '../widgets/vintage_background.dart';
@@ -284,11 +285,6 @@ class _CabinetBody extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF8A5F3C), Color(0xFF69452A)],
-            ),
             border: Border.all(color: const Color(0x40000000)),
             boxShadow: [
               // The cabinet stands in the room: one deep grounded shadow.
@@ -303,9 +299,17 @@ class _CabinetBody extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             child: Stack(
               children: [
-                // Shared timber grain across the whole carcass.
-                Positioned.fill(
-                  child: CustomPaint(painter: WoodGrainPainter()),
+                // One continuous varnished timber body (calm finish, no bevel;
+                // the drawer faces carry the bevels).
+                const Positioned.fill(
+                  child: CustomPaint(
+                    painter: WoodPainter(
+                      light: Color(0xFF8A5F3C),
+                      dark: Color(0xFF69452A),
+                      seed: 11,
+                      bevelled: false,
+                    ),
+                  ),
                 ),
                 Padding(
                   // Frame: sides and top are slim rails; the bottom is a
