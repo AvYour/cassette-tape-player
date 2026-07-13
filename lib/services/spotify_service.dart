@@ -6,6 +6,8 @@ import 'package:spotify_sdk/spotify_sdk.dart';
 import 'package:spotify_sdk/models/player_state.dart';
 import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
+import '../models/track_info.dart';
+import '../utils/lru_cache.dart';
 import '../utils/playlist_paging.dart';
 import 'spotify_auth.dart';
 
@@ -48,7 +50,8 @@ class SpotifyService extends ChangeNotifier {
   int get nowIndex => _nowIndex;
   String? get nowContextUri => _nowContextUri;
 
-  void setNowPlaying(List<CassetteTape> queue, int index, {String? contextUri}) {
+  void setNowPlaying(List<CassetteTape> queue, int index,
+      {String? contextUri}) {
     _nowQueue = queue;
     _nowIndex = index;
     _nowContextUri = contextUri;
@@ -201,9 +204,8 @@ class SpotifyService extends ChangeNotifier {
           .map((e) => Playlist.fromJson(e.value, e.key))
           .toList();
       // Keep only playlists the user created (owns), when we know the id.
-      _playlists = userId == null
-          ? all
-          : all.where((p) => p.ownerId == userId).toList();
+      _playlists =
+          userId == null ? all : all.where((p) => p.ownerId == userId).toList();
       notifyListeners();
     } catch (_) {}
   }
@@ -296,6 +298,45 @@ class SpotifyService extends ChangeNotifier {
   /// The Spotify URI of the track Spotify is currently playing (from the
   /// subscription), used to keep the app's display in step with Spotify.
   String? get currentTrackUri => _playerState?.track?.uri;
+
+  // Liner-notes details per track id, cached (incl. misses) so reopening the
+  // notes is instant and demo tapes don't refetch a 404 every time.
+  final LruCache<TrackInfo?> _infoCache = LruCache<TrackInfo?>(capacity: 150);
+
+  /// Full track details (all artists, popularity, the primary artist's genres
+  /// and followers) for the liner-notes card. Null when unavailable.
+  Future<TrackInfo?> fetchTrackInfo(CassetteTape tape) async {
+    if (_infoCache.containsKey(tape.id)) return _infoCache.get(tape.id);
+    if (!hasWebApi) return null;
+    try {
+      final res = await _authedGet(Uri.parse(
+          'https://api.spotify.com/v1/tracks/${tape.id}?market=from_token'));
+      if (res.statusCode != 200) {
+        _infoCache.put(tape.id, null);
+        return null;
+      }
+      final trackJson = json.decode(res.body) as Map<String, dynamic>;
+      // Enrich with the primary artist's profile (genres, followers).
+      Map<String, dynamic>? artistJson;
+      final artists = trackJson['artists'] as List?;
+      final artistId =
+          artists != null && artists.isNotEmpty && artists.first is Map
+              ? (artists.first as Map)['id']
+              : null;
+      if (artistId is String && artistId.isNotEmpty) {
+        final ares = await _authedGet(
+            Uri.parse('https://api.spotify.com/v1/artists/$artistId'));
+        if (ares.statusCode == 200) {
+          artistJson = json.decode(ares.body) as Map<String, dynamic>;
+        }
+      }
+      final info = TrackInfo.fromJson(trackJson, artistJson: artistJson);
+      _infoCache.put(tape.id, info);
+      return info;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Start playing a tape. Plays the real track through Spotify when connected
   /// (and the tape has a URI); otherwise runs the local demo simulation so the

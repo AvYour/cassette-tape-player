@@ -16,6 +16,7 @@ import '../utils/tape_wind.dart';
 import '../utils/vu_motion.dart';
 import '../widgets/cassette_tape_view.dart';
 import '../widgets/eject_button.dart';
+import '../widgets/liner_notes_sheet.dart';
 import '../widgets/lyrics_view.dart';
 import '../widgets/skeuo_button.dart';
 import '../widgets/title_header.dart';
@@ -534,9 +535,18 @@ class _PlayerScreenState extends State<PlayerScreen>
                     widthFactor: 0.85,
                     child: SizedBox(
                       height: 40,
-                      child: VintageTitleHeader(
-                        tape: _tape,
-                        tapeState: _tapeState,
+                      // The J-card IS the info card: tap it to slide out the
+                      // liner notes with the track's full Spotify details.
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          LinerNotesSheet.show(
+                              context, _tape, widget.spotifyService);
+                        },
+                        child: VintageTitleHeader(
+                          tape: _tape,
+                          tapeState: _tapeState,
+                        ),
                       ),
                     ),
                   ),
