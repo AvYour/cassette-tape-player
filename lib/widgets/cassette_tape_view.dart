@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/cassette_tape.dart';
 import '../painters/cassette_tape_painter.dart';
@@ -23,7 +24,12 @@ class CassetteTapeView extends StatelessWidget {
   final CassetteTape tape;
   final ReelAngles? angles;
 
-  const CassetteTapeView({super.key, required this.tape, this.angles});
+  /// Track progress 0..1 driving the tape packs (supply drains into take-up).
+  /// Null shows the classic at-rest pose (full left, empty right).
+  final ValueListenable<double>? progress;
+
+  const CassetteTapeView(
+      {super.key, required this.tape, this.angles, this.progress});
 
   static const Color _neutralShell = Color(0xFF2A2622);
   static const Color _neutralStripe = Color(0xFF14100C);
@@ -52,14 +58,29 @@ class CassetteTapeView extends StatelessWidget {
                         Container(color: _neutralShell),
                   ),
                 ),
-              CustomPaint(
-                painter: CassetteBasePainter(
-                  bodyColor: _neutralShell,
-                  labelColor: const Color(0xFFF4EFE6),
-                  stripeColor: hasArt ? _neutralStripe : tape.stripeColor,
-                  useArt: hasArt,
+              if (progress == null)
+                CustomPaint(
+                  painter: CassetteBasePainter(
+                    bodyColor: _neutralShell,
+                    labelColor: const Color(0xFFF4EFE6),
+                    stripeColor: hasArt ? _neutralStripe : tape.stripeColor,
+                    useArt: hasArt,
+                  ),
+                )
+              else
+                // The tape packs wind between the reels with the song.
+                ValueListenableBuilder<double>(
+                  valueListenable: progress!,
+                  builder: (context, p, _) => CustomPaint(
+                    painter: CassetteBasePainter(
+                      bodyColor: _neutralShell,
+                      labelColor: const Color(0xFFF4EFE6),
+                      stripeColor: hasArt ? _neutralStripe : tape.stripeColor,
+                      useArt: hasArt,
+                      progress: p,
+                    ),
+                  ),
                 ),
-              ),
               RepaintBoundary(
                 child: a == null
                     ? const CustomPaint(

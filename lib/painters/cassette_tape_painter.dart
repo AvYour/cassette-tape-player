@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../utils/colors.dart';
+import '../utils/tape_wind.dart';
 
 /// Aspect ratio of the cassette shell (reference: 1.58).
 const double kCassetteAspect = 1.58;
@@ -11,16 +12,21 @@ RRect _windowRRect(double w, double h) => RRect.fromRectAndRadius(
       Radius.circular(h * 0.03),
     );
 
-/// Static bottom layer: plastic shell, paper label, stripe, side-A markings
-/// and the recessed window content that never moves (tape spools, gauge).
+/// Bottom layer: plastic shell, paper label, stripe, side-A markings and the
+/// recessed window content (tape spools, gauge).
 ///
-/// All geometry is a direct port of the reference renderer's proportions;
-/// the wound spools are fixed — full on the left, empty on the right — and
-/// only the hubs (middle layer) rotate.
+/// All geometry is a direct port of the reference renderer's proportions.
+/// The wound spools follow [progress]: the supply pack (left) drains into the
+/// take-up pack (right) with real tape physics (see [TapeWind]), so you can
+/// SEE how far into the song the tape is. At the default progress 0 the
+/// classic full-left / empty-right pose is drawn.
 class CassetteBasePainter extends CustomPainter {
   final Color bodyColor;
   final Color labelColor;
   final Color stripeColor;
+
+  /// Track progress 0..1 that places the tape packs.
+  final double progress;
 
   /// When true the shell body is left translucent so an album-art image behind
   /// the painter shows through as the cassette's body (only a plastic sheen is
@@ -31,6 +37,7 @@ class CassetteBasePainter extends CustomPainter {
     required this.bodyColor,
     required this.labelColor,
     required this.stripeColor,
+    this.progress = 0,
     this.useArt = false,
   });
 
@@ -159,7 +166,8 @@ class CassetteBasePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = h * 0.008
       ..strokeCap = StrokeCap.round;
-    canvas.drawOval(Rect.fromLTWH(n90Left, n90Top, w * 0.025, w * 0.025), ink90);
+    canvas.drawOval(
+        Rect.fromLTWH(n90Left, n90Top, w * 0.025, w * 0.025), ink90);
     canvas.drawLine(
       Offset(n90Left + w * 0.025, n90Top + w * 0.012),
       Offset(n90Left + w * 0.025, n90Top + h * 0.06),
@@ -188,24 +196,26 @@ class CassetteBasePainter extends CustomPainter {
     final leftHub = Offset(w * 0.32, h * 0.46);
     final rightHub = Offset(w * 0.68, h * 0.46);
     final fullR = h * 0.23;
-    final emptyR = h * 0.12;
+    // The packs wind with the song: supply drains, take-up swells.
+    final leftR = fullR * TapeWind.leftRadiusFraction(progress);
+    final rightR = fullR * TapeWind.rightRadiusFraction(progress);
 
     final tapeLine = Paint()
       ..color = kTapeDark
       ..strokeWidth = h * 0.015;
     canvas.drawLine(
-      Offset(leftHub.dx - fullR, leftHub.dy),
-      Offset(leftHub.dx - fullR, winRect.bottom),
+      Offset(leftHub.dx - leftR, leftHub.dy),
+      Offset(leftHub.dx - leftR, winRect.bottom),
       tapeLine,
     );
     canvas.drawLine(
-      Offset(rightHub.dx + emptyR, rightHub.dy),
-      Offset(rightHub.dx + emptyR, winRect.bottom),
+      Offset(rightHub.dx + rightR, rightHub.dy),
+      Offset(rightHub.dx + rightR, winRect.bottom),
       tapeLine,
     );
 
-    _drawTapeSpool(canvas, leftHub, fullR, h);
-    _drawTapeSpool(canvas, rightHub, emptyR, h);
+    _drawTapeSpool(canvas, leftHub, leftR, h);
+    _drawTapeSpool(canvas, rightHub, rightR, h);
 
     // Tape position gauge between the spools.
     final gaugeW = w * 0.18;
@@ -213,7 +223,8 @@ class CassetteBasePainter extends CustomPainter {
     final gaugeLeft = (w - gaugeW) / 2;
     final gaugeTop = winRect.top + winRect.height * 0.45;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(gaugeLeft, gaugeTop, gaugeW, gaugeH),
+      RRect.fromRectAndRadius(
+          Rect.fromLTWH(gaugeLeft, gaugeTop, gaugeW, gaugeH),
           Radius.circular(h * 0.01)),
       Paint()..color = const Color(0x1AFFFFFF),
     );
@@ -234,7 +245,10 @@ class CassetteBasePainter extends CustomPainter {
       old.bodyColor != bodyColor ||
       old.labelColor != labelColor ||
       old.stripeColor != stripeColor ||
-      old.useArt != useArt;
+      old.useArt != useArt ||
+      // Repaint only when the packs have visibly moved (~1% steps), not on
+      // every position tick.
+      (old.progress * 100).round() != (progress * 100).round();
 }
 
 /// Middle layer: the two rotating metallic hubs, clipped to the window.
@@ -369,7 +383,8 @@ class CassetteFrontPainter extends CustomPainter {
   void _hole(Canvas canvas, double x, double y, double r) {
     canvas.drawCircle(
         Offset(x, y + 2), r + 2, Paint()..color = const Color(0x66000000));
-    canvas.drawCircle(Offset(x, y), r, Paint()..color = const Color(0xFF050505));
+    canvas.drawCircle(
+        Offset(x, y), r, Paint()..color = const Color(0xFF050505));
   }
 
   void _screw(Canvas canvas, Offset c, double h) {

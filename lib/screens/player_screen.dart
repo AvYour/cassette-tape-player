@@ -10,6 +10,7 @@ import '../services/sound_service.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../utils/playback_math.dart';
+import '../utils/tape_wind.dart';
 import '../widgets/cassette_tape_view.dart';
 import '../widgets/eject_button.dart';
 import '../widgets/lyrics_view.dart';
@@ -52,13 +53,15 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  // Nominal hub speeds in deg/s. The take-up (right) hub leads the supply
-  // (left) hub by the wound-radius ratio, exactly as in the reference.
-  static const double _rightSpeed = 120;
-  static const double _leftSpeed = 120 * (0.12 / 0.23);
+  // Base hub speed in deg/s (an empty pack at constant linear tape speed).
+  // Each hub's actual speed follows its pack radius via TapeWind.hubSpeed:
+  // the supply hub spins up as it drains, the take-up slows as it fills.
+  static const double _baseHubSpeed = 120;
 
   final ReelAngles _angles = ReelAngles();
   final ValueNotifier<double> _lyricProgress = ValueNotifier(0);
+  // Track progress 0..1 — winds the painted tape packs and feeds the counter.
+  final ValueNotifier<double> _trackProgress = ValueNotifier(0);
   late final Ticker _ticker;
 
   TapeState _tapeState = TapeState.stopped;
@@ -224,6 +227,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _ticker.dispose();
     _angles.dispose();
     _lyricProgress.dispose();
+    _trackProgress.dispose();
     super.dispose();
   }
 
@@ -330,8 +334,15 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     if (_speedMul.abs() > 0.01) {
       final frameDelta = _speedMul * motorDrift * dt;
-      _right += _rightSpeed * frameDelta;
-      _left += _leftSpeed * frameDelta;
+      // Real reel physics: each hub turns at a rate set by how much tape is
+      // currently wound on it.
+      final p = _trackProgress.value;
+      _right += _baseHubSpeed *
+          TapeWind.hubSpeed(TapeWind.rightRadiusFraction(p)) *
+          frameDelta;
+      _left += _baseHubSpeed *
+          TapeWind.hubSpeed(TapeWind.leftRadiusFraction(p)) *
+          frameDelta;
       _angles.update(_left, _right);
     }
 
@@ -410,6 +421,8 @@ class _PlayerScreenState extends State<PlayerScreen>
       case TapeState.stopped:
         _anchor(_positionMs);
     }
+
+    _trackProgress.value = dur > 0 ? (_positionMs / dur).clamp(0.0, 1.0) : 0.0;
   }
 
   @override
@@ -469,7 +482,11 @@ class _PlayerScreenState extends State<PlayerScreen>
                 child: Hero(
                   tag: 'tape_${_tape.id}',
                   flightShuttleBuilder: cassetteFlightShuttle(_tape),
-                  child: _PlayerCassette(tape: _tape, angles: _angles),
+                  child: _PlayerCassette(
+                    tape: _tape,
+                    angles: _angles,
+                    progress: _trackProgress,
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -548,14 +565,39 @@ class _PlayerScreenState extends State<PlayerScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  'COMPONENT PANEL',
-                  style: GoogleFonts.robotoMono(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: kMark.withValues(alpha: 0.8),
-                    letterSpacing: 2,
-                  ),
+                // Mechanical counter + LCD clock, flanking the panel caption.
+                ValueListenableBuilder<double>(
+                  valueListenable: _trackProgress,
+                  builder: (context, p, _) {
+                    final dur = _tape.durationMs;
+                    final ms = (p * dur).round();
+                    return Row(
+                      children: [
+                        _CounterCells(digits: TapeWind.counterDigits(ms)),
+                        Expanded(
+                          child: Text(
+                            'COMPONENT PANEL',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.robotoMono(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: kMark.withValues(alpha: 0.8),
+                              letterSpacing: 2,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${TapeWind.clock(ms)}/${TapeWind.clock(dur)}',
+                          style: GoogleFonts.robotoMono(
+                            fontSize: 9.5,
+                            letterSpacing: 0.5,
+                            color:
+                                const Color(0xFF8FD99A).withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -625,12 +667,56 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 }
 
+/// A four-digit mechanical tape counter: each digit sits in its own dark
+/// cell, like the odometer wheels on a real deck.
+class _CounterCells extends StatelessWidget {
+  final String digits;
+
+  const _CounterCells({required this.digits});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final d in digits.split(''))
+          Container(
+            width: 11,
+            height: 16,
+            margin: const EdgeInsets.only(right: 1.5),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(2),
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF090909), Color(0xFF1C1C1C)],
+              ),
+              border: Border.all(color: const Color(0x33000000)),
+            ),
+            child: Text(
+              d,
+              style: GoogleFonts.robotoMono(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFFE8E2D4),
+                height: 1,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// Cassette with its dark backing plate and deep shadow (player pose).
 class _PlayerCassette extends StatelessWidget {
   final CassetteTape tape;
   final ReelAngles angles;
+  final ValueNotifier<double> progress;
 
-  const _PlayerCassette({required this.tape, required this.angles});
+  const _PlayerCassette(
+      {required this.tape, required this.angles, required this.progress});
 
   @override
   Widget build(BuildContext context) {
@@ -651,7 +737,7 @@ class _PlayerCassette extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             const CustomPaint(painter: _BackingPainter()),
-            CassetteTapeView(tape: tape, angles: angles),
+            CassetteTapeView(tape: tape, angles: angles, progress: progress),
           ],
         ),
       ),
