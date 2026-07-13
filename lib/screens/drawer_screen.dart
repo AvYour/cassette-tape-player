@@ -29,7 +29,7 @@ class DrawerScreen extends StatefulWidget {
   });
 
   /// Cassettes per row in the drawer.
-  static const int columns = 5;
+  static const int columns = 7;
 
   @override
   State<DrawerScreen> createState() => _DrawerScreenState();
@@ -412,8 +412,9 @@ class _DrawerScreenState extends State<DrawerScreen>
           physics: const BouncingScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: DrawerScreen.columns,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 6,
+            // Tighter filing at seven per row.
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 4,
             childAspectRatio: _spineW / _spineH,
           ),
           itemCount: tapes.length,

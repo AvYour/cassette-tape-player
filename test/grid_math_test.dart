@@ -1,7 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cassette_tape_player/screens/drawer_screen.dart';
 import 'package:cassette_tape_player/utils/grid_math.dart';
 
 void main() {
+  group('drawer grid density', () {
+    test('the drawer files seven tapes per row', () {
+      expect(DrawerScreen.columns, 7);
+      // Row boundaries at that density.
+      expect(GridMath.rowOf(6, columns: DrawerScreen.columns), 0);
+      expect(GridMath.rowOf(7, columns: DrawerScreen.columns), 1);
+      expect(GridMath.rowCount(72, columns: DrawerScreen.columns), 11);
+    });
+  });
+
   group('GridMath rows/cols', () {
     test('maps an index to its row and column (5 per row)', () {
       expect(GridMath.rowOf(0, columns: 5), 0);
