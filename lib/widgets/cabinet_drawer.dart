@@ -127,53 +127,11 @@ class _DrawerFace extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    // A card in a brass label holder, like a real card-catalog
-                    // drawer — the label is paper, not paint on the wood.
+                    // A paper card in a brass card-catalog holder.
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF2E9D4),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                              color: const Color(0xFFB08D57), width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.35),
-                              blurRadius: 3,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              playlist.name.toUpperCase(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.robotoMono(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF2C2117),
-                                letterSpacing: 1,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              _subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.robotoMono(
-                                fontSize: 9.5,
-                                color: const Color(0xFF2C2117)
-                                    .withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: _BrassLabelHolder(
+                        title: playlist.name.toUpperCase(),
+                        subtitle: _subtitle,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -188,6 +146,126 @@ class _DrawerFace extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A card-catalog label holder: a bevelled brass frame screwed to the drawer,
+/// with a typewritten paper card slipped in behind it. The card tucks UNDER
+/// the frame (inner shadow along the top) instead of floating on the wood.
+class _BrassLabelHolder extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _BrassLabelHolder({required this.title, required this.subtitle});
+
+  static const Color _ink = Color(0xFF33261A);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        // Bevelled brass: catches light on top, shades toward the bottom.
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFD9BC7D), Color(0xFFA5814C), Color(0xFF7C5D33)],
+          stops: [0.0, 0.55, 1.0],
+        ),
+        border: Border.all(color: const Color(0xFF5E4726), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 3,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      // Wider side rails leave room for the mounting screws.
+      padding: const EdgeInsets.fromLTRB(11, 4, 11, 4),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // The paper card.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6EEDC),
+              borderRadius: BorderRadius.circular(2.5),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.specialElite(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: _ink,
+                  ),
+                ),
+                const SizedBox(height: 1.5),
+                // The red rule of an index card.
+                Container(height: 1, color: const Color(0x40A33D2E)),
+                const SizedBox(height: 2.5),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.robotoMono(
+                    fontSize: 9,
+                    color: _ink.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // The card is slipped in behind the frame: shadow along the top lip.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 5,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(2.5)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.22),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Mounting screws on the side rails.
+          Positioned(left: -8, top: 0, bottom: 0, child: _screw()),
+          Positioned(right: -8, top: 0, bottom: 0, child: _screw()),
+        ],
+      ),
+    );
+  }
+
+  Widget _screw() => Center(
+        child: Container(
+          width: 4.5,
+          height: 4.5,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [Color(0xFFEADFB9), Color(0xFF6B5227)],
+            ),
+          ),
+        ),
+      );
 }
 
 /// A recessed drawer cup handle: dark inset well, brushed-metal bar, two screws.
