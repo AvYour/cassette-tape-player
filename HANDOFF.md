@@ -97,14 +97,20 @@ lib/
 │   ├── skeuo_button.dart          # piano-key transport buttons (haptic + click sound)
 │   ├── eject_button.dart, volume_tuner.dart, tape_color_builder.dart, vintage_background.dart
 └── screens/
-    ├── cabinet_screen.dart        # home: ONE wooden cabinet carcass (_CabinetBody: rails, plinth, feet)
-    │                              #   holding drawer faces; starter-mixtape drawer when no playlists;
-    │                              #   tap = POV route (perspective rotateX) into drawer_screen
-    ├── drawer_screen.dart         # top-down INTO the drawer: wooden rim + felt, vertical grid of
-    │                              #   spines (5/row, GridMath), rows settle in staggered
+    ├── cabinet_screen.dart        # home = "THE DEN", a 1985 room at dusk (wallpaper_painter):
+    │                              #   poster on the wall = now-playing art; pinned paper note = status;
+    │                              #   tape_shelf.dart = playlists (stylized spines, brass plaques);
+    │                              #   desk_deck.dart = living mini-player (reels spin; tap → player)
+    │                              #   + bakelite radio (tap → search). Starter-mixtape shelf offline.
+    │                              #   Shelf tap = POV route (rotateX w/ easeOutBack settle) into:
+    ├── drawer_screen.dart         # top-down INTO the box: wood rim + painted felt, tapes in recessed
+    │                              #   slots (5/row, GridMath), staggered settle-in, press-lift, red
+    │                              #   now-playing LED, pull-down-to-shuffle (ShufflePull)
     ├── search_screen.dart         # live Spotify search (rows w/ art) + mini-bar
     └── player_screen.dart         # the player (reels, lyrics, panel, dynamic bg, queue playback)
 ```
+Note: `widgets/cabinet_drawer.dart` (drawer-face design) is no longer used by the home
+screen but is kept with its widget tests in case the cabinet concept returns.
 
 `third_party/spotify_sdk/` — **vendored** copy of spotify_sdk 3.0.0 with the dead Flutter v1
 embedding (`PluginRegistry.Registrar`) stripped so it compiles; wired via `dependency_overrides`

@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/playlist.dart';
+import '../painters/wallpaper_painter.dart';
 import '../services/spotify_service.dart';
-import '../utils/colors.dart';
-import '../painters/wood_painter.dart';
-import '../widgets/cabinet_drawer.dart';
-import '../widgets/mini_player_bar.dart';
-import '../widgets/vintage_background.dart';
+import '../widgets/desk_deck.dart';
+import '../widgets/tape_shelf.dart';
 import 'drawer_screen.dart';
+import 'player_screen.dart';
 import 'search_screen.dart';
 
-/// Home screen: a filing cabinet whose drawers are playlists. A built-in
-/// starter mixtape works offline; connecting to Spotify adds the user's own
-/// playlists as drawers. A search button opens live Spotify track search.
+/// Home: a 1985 bedroom at dusk. The tape shelf on the wall holds the
+/// playlists; the poster shows what's playing; the deck on the desk is the
+/// living now-playing (reels turn, tap to reopen the player); the radio on
+/// the desk tunes into search.
 class CabinetScreen extends StatefulWidget {
   final SpotifyService spotifyService;
 
@@ -24,11 +24,8 @@ class CabinetScreen extends StatefulWidget {
 }
 
 class _CabinetScreenState extends State<CabinetScreen> {
-  // Key of the currently open drawer; null = all closed.
-  String? _openKey;
-
-  // The built-in starter mixtape drawer, shown while there are no Spotify
-  // playlists so the cabinet is explorable offline. Its tapes are preloaded,
+  // The built-in starter mixtape shelf, shown while there are no Spotify
+  // playlists so the room is explorable offline. Its tapes are preloaded,
   // so loadPlaylistTracks() is a no-op for it.
   late final Playlist _demoPlaylist = Playlist.demo();
 
@@ -44,12 +41,10 @@ class _CabinetScreenState extends State<CabinetScreen> {
     });
   }
 
-  /// Pulls a drawer open: the POV swings from facing the cabinet to looking
-  /// straight down into the drawer (a perspective rotation on the incoming
-  /// route). The face stays "pulled" while the drawer view is open.
+  /// Takes a shelf down: the POV swings from facing the wall to looking
+  /// straight down into the box of tapes (perspective rotation on the route).
   Future<void> _openDrawer(Playlist playlist) async {
-    HapticFeedback.mediumImpact(); // the tug of the drawer coming free
-    setState(() => _openKey = playlist.id);
+    HapticFeedback.mediumImpact(); // lifting the box off the shelf
     svc.loadPlaylistTracks(playlist);
     await Navigator.push(
       context,
@@ -60,8 +55,8 @@ class _CabinetScreenState extends State<CabinetScreen> {
         pageBuilder: (context, animation, _) =>
             DrawerScreen(playlist: playlist, spotifyService: svc),
         transitionsBuilder: (context, animation, _, child) {
-          // The swing settles with a slight overshoot — the drawer thumping
-          // against its rails — while the fade stays smooth and clamped.
+          // The swing settles with a slight overshoot — the box thumping
+          // down on the desk — while the fade stays smooth and clamped.
           final swing = CurvedAnimation(
             parent: animation,
             curve: Curves.easeOutBack,
@@ -80,9 +75,6 @@ class _CabinetScreenState extends State<CabinetScreen> {
               return Opacity(
                 opacity: fade.value.clamp(0.0, 1.0),
                 child: Transform(
-                  // Lean-over-the-drawer POV: the view starts tipped away
-                  // (as if still facing the cabinet) and rotates flat, like
-                  // your eyes travelling up and over the open drawer.
                   alignment: Alignment.topCenter,
                   transform: Matrix4.identity()
                     ..setEntry(3, 2, 0.0012)
@@ -96,67 +88,93 @@ class _CabinetScreenState extends State<CabinetScreen> {
         },
       ),
     );
-    if (mounted) setState(() => _openKey = null); // drawer pushed back in
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: VintageBackground(
-        child: SafeArea(
-          child: ListenableBuilder(
-            listenable: svc,
-            builder: (context, _) {
-              return Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.only(bottom: 32, top: 4),
-                      children: [
-                        // The user's own Spotify playlists, filed as drawers
-                        // in one solid wooden cabinet. With no playlists yet,
-                        // the built-in starter mixtape keeps a drawer in it.
-                        if (svc.playlists.isNotEmpty || !svc.isLoading)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            child: _CabinetBody(
-                              children: [
-                                for (final pl in svc.playlists.isEmpty
-                                    ? [_demoPlaylist]
-                                    : svc.playlists)
-                                  CabinetDrawer(
-                                    playlist: pl,
-                                    isOpen: _openKey == pl.id,
-                                    onTap: () => _openDrawer(pl),
-                                    loadedCount: pl.tapes?.length,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        if (svc.isLoading && svc.playlists.isEmpty)
-                          _buildConnecting(),
-                        if (svc.statusMessage != null)
-                          _buildStatus(svc.statusMessage!),
-                        if (!svc.isConnected && !svc.isLoading)
-                          _buildConnectHint(),
-                      ],
-                    ),
-                  ),
-                  MiniPlayerBar(service: svc),
-                ],
-              );
-            },
+  /// Reopens the full player for whatever tape is in the deck.
+  void _openNowPlaying() {
+    if (svc.nowPlaying == null) return;
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 450),
+        reverseTransitionDuration: const Duration(milliseconds: 450),
+        pageBuilder: (context, animation, _) => FadeTransition(
+          opacity: animation,
+          child: PlayerScreen(
+            queue: svc.nowQueue,
+            index: svc.nowIndex,
+            spotifyService: svc,
+            contextUri: svc.nowContextUri,
           ),
         ),
       ),
     );
   }
 
+  void _openSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SearchScreen(spotifyService: svc)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const CustomPaint(painter: WallpaperPainter()),
+          SafeArea(
+            child: ListenableBuilder(
+              listenable: svc,
+              builder: (context, _) {
+                final shelves =
+                    svc.playlists.isEmpty ? [_demoPlaylist] : svc.playlists;
+                return Column(
+                  children: [
+                    _buildHeader(),
+                    // The wall: poster + a pinned note.
+                    SizedBox(
+                      height: 142,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _Poster(service: svc),
+                            const SizedBox(width: 16),
+                            Expanded(child: _WallNote(service: svc)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Expanded(
+                      child: TapeShelf(
+                        playlists: shelves,
+                        onOpen: _openDrawer,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DeskDeck(
+                      service: svc,
+                      onOpenPlayer: _openNowPlaying,
+                      onOpenSearch: _openSearch,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 16, 12),
+      padding: const EdgeInsets.fromLTRB(24, 18, 16, 10),
       child: Row(
         children: [
           Expanded(
@@ -164,40 +182,28 @@ class _CabinetScreenState extends State<CabinetScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'THE CABINET',
+                  'THE DEN',
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
-                    fontSize: 30,
-                    color: kTextDark,
-                    letterSpacing: 3,
+                    fontSize: 28,
+                    color: Color(0xFFF4EFE6),
+                    letterSpacing: 4,
                   ),
                 ),
                 Text(
                   svc.isConnected
-                      ? 'Pull a drawer to browse'
+                      ? 'Take a tape off the shelf'
                       : svc.isLoading
                           ? 'Connecting to Spotify…'
-                          : 'Connect Spotify to load your playlists',
+                          : 'Connect Spotify to fill the shelf',
                   style: GoogleFonts.robotoMono(
                     fontSize: 11,
-                    color: kVintageInk,
+                    color: const Color(0xFFF4EFE6).withValues(alpha: 0.5),
                   ),
                 ),
               ],
             ),
           ),
-          _RoundIconButton(
-            icon: Icons.search,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SearchScreen(spotifyService: svc),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
           if (!svc.isConnected)
             _RoundIconButton(
               icon: Icons.link,
@@ -209,164 +215,177 @@ class _CabinetScreenState extends State<CabinetScreen> {
       ),
     );
   }
+}
 
-  Widget _buildStatus(String message) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline, size: 18, color: kVintageInk),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: GoogleFonts.robotoMono(
-                  fontSize: 11,
-                  height: 1.4,
-                  color: kTextDark,
+/// The poster over the desk: whatever's playing becomes wall art. With
+/// nothing loaded it stays the faded mixtape poster that came with the room.
+class _Poster extends StatelessWidget {
+  final SpotifyService service;
+
+  const _Poster({required this.service});
+
+  @override
+  Widget build(BuildContext context) {
+    final tape = service.nowPlaying;
+    final art = tape?.thumbUrl;
+    return Transform.rotate(
+      angle: -0.025,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 116,
+            height: 136,
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFE6D2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: art != null && art.isNotEmpty
+                      ? Image.network(
+                          art,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          cacheWidth: 260,
+                          errorBuilder: (_, __, ___) => const _PosterFallback(),
+                        )
+                      : const _PosterFallback(),
+                ),
+                if (tape != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      tape.trackName.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.specialElite(
+                        fontSize: 8,
+                        color: const Color(0xFF33261A),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Pushpin.
+          Positioned(
+            top: -4,
+            left: 52,
+            child: Container(
+              width: 9,
+              height: 9,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0xFFE0483A), Color(0xFF7E2018)],
                 ),
               ),
             ),
-            if (svc.isConnected && !svc.hasWebApi)
-              GestureDetector(
-                onTap: svc.isLoading ? null : svc.connectToSpotify,
-                child: Text(
-                  'RETRY',
-                  style: GoogleFonts.robotoMono(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1DB954),
-                  ),
-                ),
-              ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildConnecting() {
-    return const Padding(
-      padding: EdgeInsets.only(top: 80),
-      child: Center(
-        child: CircularProgressIndicator(strokeWidth: 2, color: kGold),
-      ),
-    );
-  }
+class _PosterFallback extends StatelessWidget {
+  const _PosterFallback();
 
-  Widget _buildConnectHint() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF7E3B32),
+      alignment: Alignment.center,
       child: Text(
-        'Tap the green link icon to connect Spotify and load your own playlists as drawers.',
+        'MIX\n’85',
         textAlign: TextAlign.center,
-        style: GoogleFonts.robotoMono(
-          fontSize: 11,
-          height: 1.5,
-          color: kVintageInk.withValues(alpha: 0.8),
+        style: GoogleFonts.specialElite(
+          fontSize: 22,
+          height: 1.1,
+          color: const Color(0xFFEFE6D2),
         ),
       ),
     );
   }
 }
 
-/// The cabinet carcass: one continuous timber body whose drawers sit flush in
-/// their openings — top plank, frame rails between drawers, a plinth and feet.
-/// This is what makes the home read as a real filing cabinet instead of an
-/// accordion of floating bars.
-class _CabinetBody extends StatelessWidget {
-  final List<Widget> children;
+/// A paper note pinned to the wall: connection status, errors, or just the
+/// room's standing reminder.
+class _WallNote extends StatelessWidget {
+  final SpotifyService service;
 
-  const _CabinetBody({required this.children});
+  const _WallNote({required this.service});
+
+  String get _text {
+    if (service.statusMessage != null) return service.statusMessage!;
+    if (service.isLoading) return 'Connecting to Spotify…';
+    if (!service.isConnected) {
+      return 'Tap the green link up top to connect Spotify and fill the shelf.';
+    }
+    return 'Pull a box down off the shelf.\nYank it to shuffle.';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0x40000000)),
-            boxShadow: [
-              // The cabinet stands in the room: one deep grounded shadow.
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 26,
-                offset: const Offset(0, 16),
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Transform.rotate(
+        angle: 0.02,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0E3B2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Stack(
-              children: [
-                // One continuous varnished timber body (calm finish, no bevel;
-                // the drawer faces carry the bevels).
-                const Positioned.fill(
-                  child: CustomPaint(
-                    painter: WoodPainter(
-                      light: Color(0xFF8A5F3C),
-                      dark: Color(0xFF69452A),
-                      seed: 11,
-                      bevelled: false,
-                    ),
-                  ),
+              child: Text(
+                _text,
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.specialElite(
+                  fontSize: 10.5,
+                  height: 1.45,
+                  color: const Color(0xFF4A3A22),
                 ),
-                Padding(
-                  // Frame: sides and top are slim rails; the bottom is a
-                  // heavier plinth, like real casework.
-                  padding: const EdgeInsets.fromLTRB(10, 12, 10, 16),
-                  child: Column(
-                    children: [
-                      for (int i = 0; i < children.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 8), // frame rail
-                        children[i],
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-        // Feet, slightly inset from the corners.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [_foot(), _foot()],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _foot() => Container(
-        width: 54,
-        height: 12,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF5E3E27), Color(0xFF3E2817)],
-          ),
-          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 6,
-              offset: const Offset(0, 4),
+            // Pushpin.
+            Positioned(
+              top: -4,
+              left: 18,
+              child: Container(
+                width: 9,
+                height: 9,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [Color(0xFF4A7EC2), Color(0xFF1E3A66)],
+                  ),
+                ),
+              ),
             ),
           ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _RoundIconButton extends StatelessWidget {
