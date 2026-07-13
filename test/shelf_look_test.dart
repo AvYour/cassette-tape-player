@@ -43,4 +43,21 @@ void main() {
       expect(ShelfLook.visibleCount(trackCount: 10, slots: 0), 0);
     });
   });
+
+  group('ShelfLook.placeholderCount', () {
+    test('dresses an unknown-size shelf with a plausible number of tapes', () {
+      for (final seed in [1, 7, 99]) {
+        final n = ShelfLook.placeholderCount(seed: seed, slots: 20);
+        expect(n, inInclusiveRange(5, 20), reason: 'seed=$seed');
+      }
+    });
+
+    test('is deterministic per seed and fits small shelves', () {
+      expect(ShelfLook.placeholderCount(seed: 3, slots: 20),
+          ShelfLook.placeholderCount(seed: 3, slots: 20));
+      expect(ShelfLook.placeholderCount(seed: 3, slots: 4),
+          inInclusiveRange(1, 4));
+      expect(ShelfLook.placeholderCount(seed: 3, slots: 0), 0);
+    });
+  });
 }

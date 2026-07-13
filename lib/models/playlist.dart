@@ -46,15 +46,27 @@ class Playlist {
     return demo;
   }
 
+  /// The playlist's track total, wherever this API version put it: the
+  /// classic `tracks.total`, the renamed `items.total` (Feb 2026), or a flat
+  /// `item_count`. Missing entirely → 0.
+  static int _totalOf(Map<String, dynamic> json) {
+    for (final key in ['tracks', 'items']) {
+      final nested = json[key];
+      if (nested is Map && nested['total'] is int) {
+        return nested['total'] as int;
+      }
+    }
+    return (json['item_count'] as int?) ?? 0;
+  }
+
   factory Playlist.fromJson(Map<String, dynamic> json, int index) {
     final owner = json['owner'] as Map<String, dynamic>? ?? {};
-    final tracks = json['tracks'] as Map<String, dynamic>? ?? {};
     return Playlist(
       id: json['id'] as String? ?? 'pl_$index',
       name: json['name'] as String? ?? 'Untitled',
       owner: owner['display_name'] as String? ?? 'Spotify',
       ownerId: owner['id'] as String? ?? '',
-      trackCount: (tracks['total'] as int?) ?? 0,
+      trackCount: _totalOf(json),
       accent: kTapePalette[index % kTapePalette.length].stripe,
     );
   }

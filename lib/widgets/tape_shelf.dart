@@ -159,7 +159,9 @@ class _ShelfRow extends StatelessWidget {
                         Border.all(color: const Color(0xFF5E4726), width: 0.7),
                   ),
                   child: Text(
-                    '${playlist.name.toUpperCase()} · $_trackCount',
+                    _trackCount > 0
+                        ? '${playlist.name.toUpperCase()} · $_trackCount'
+                        : playlist.name.toUpperCase(),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.robotoMono(
@@ -196,8 +198,12 @@ class _SpineRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final slots = (constraints.maxWidth / (_spineW + _gap)).floor();
-        final visible =
-            ShelfLook.visibleCount(trackCount: trackCount, slots: slots);
+        // A shelf whose true size we don't know yet (metadata missing, tracks
+        // not loaded) still gets dressed — it should never look bare.
+        final visible = trackCount > 0
+            ? ShelfLook.visibleCount(trackCount: trackCount, slots: slots)
+            : ShelfLook.placeholderCount(
+                seed: playlist.id.hashCode, slots: slots);
         final looks = ShelfLook.spines(
           seed: playlist.id.hashCode,
           count: visible,

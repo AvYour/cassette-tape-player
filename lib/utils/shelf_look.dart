@@ -41,4 +41,13 @@ class ShelfLook {
     if (trackCount <= 0 || slots <= 0) return 0;
     return math.min(trackCount, slots);
   }
+
+  /// Set dressing for a shelf whose real size is unknown (metadata missing and
+  /// tracks not yet loaded): a plausible, seeded number of tapes so the shelf
+  /// never looks bare before it's opened.
+  static int placeholderCount({required int seed, required int slots}) {
+    if (slots <= 0) return 0;
+    final n = 5 + math.Random(seed).nextInt(8); // 5..12 tapes
+    return math.min(n, slots);
+  }
 }
