@@ -60,17 +60,25 @@ class _CabinetScreenState extends State<CabinetScreen> {
         pageBuilder: (context, animation, _) =>
             DrawerScreen(playlist: playlist, spotifyService: svc),
         transitionsBuilder: (context, animation, _, child) {
-          final t = CurvedAnimation(
+          // The swing settles with a slight overshoot — the drawer thumping
+          // against its rails — while the fade stays smooth and clamped.
+          final swing = CurvedAnimation(
             parent: animation,
-            curve: Curves.easeOutCubic,
+            curve: Curves.easeOutBack,
+            reverseCurve: Curves.easeInCubic,
+          );
+          final fade = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOut,
             reverseCurve: Curves.easeInCubic,
           );
           return AnimatedBuilder(
-            animation: t,
+            animation: animation,
             builder: (context, _) {
-              final v = t.value;
+              final v = swing.value;
+              final s = 0.92 + 0.08 * v;
               return Opacity(
-                opacity: v.clamp(0.0, 1.0),
+                opacity: fade.value.clamp(0.0, 1.0),
                 child: Transform(
                   // Lean-over-the-drawer POV: the view starts tipped away
                   // (as if still facing the cabinet) and rotates flat, like
@@ -79,7 +87,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
                   transform: Matrix4.identity()
                     ..setEntry(3, 2, 0.0012)
                     ..rotateX(-(1 - v) * 1.05)
-                    ..scaleByDouble(0.92 + 0.08 * v, 0.92 + 0.08 * v, 1, 1),
+                    ..scaleByDouble(s, s, 1, 1),
                   child: child,
                 ),
               );

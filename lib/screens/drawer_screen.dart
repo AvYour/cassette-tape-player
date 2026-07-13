@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
+import '../painters/felt_painter.dart';
 import '../painters/wood_painter.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../utils/grid_math.dart';
+import '../utils/shuffle_pull.dart';
 import '../widgets/cassette_spine.dart';
 import '../widgets/mini_player_bar.dart';
 import 'player_screen.dart';
 
 /// Looking straight down into an open drawer: the cassettes are filed in rows
-/// ([columns] per row) and you scroll vertically through them. Reached from the
-/// cabinet via a POV rotation, as if you leaned over the drawer you just pulled.
+/// ([columns] per row), each seated in its own slot, and you scroll vertically
+/// through them. Reached from the cabinet via a POV rotation, as if you leaned
+/// over the drawer you just pulled. Yank the contents down past the threshold
+/// and let go to shuffle-play the whole drawer.
 class DrawerScreen extends StatefulWidget {
   final Playlist playlist;
   final SpotifyService spotifyService;
@@ -31,14 +36,25 @@ class DrawerScreen extends StatefulWidget {
 }
 
 class _DrawerScreenState extends State<DrawerScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // Rows of tapes settle into the drawer one after another on entry.
   late final AnimationController _enter = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 700),
   )..forward();
 
+  // Slow heartbeat for the now-playing LED on the active tape's slot.
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat(reverse: true);
+
   int _enteredCount = -1;
+
+  // Pull-to-shuffle state: how far the contents are yanked down (0..1) and
+  // whether the threshold was crossed (fires on release).
+  double _pull = 0;
+  bool _pullArmed = false;
 
   // Cell geometry: a spine is 66 wide and gets ~170 of height in the drawer.
   static const double _spineW = CassetteSpine.width;
@@ -47,12 +63,29 @@ class _DrawerScreenState extends State<DrawerScreen>
   @override
   void dispose() {
     _enter.dispose();
+    _pulse.dispose();
     super.dispose();
   }
 
   void _openPlayer(int index) {
     final tapes = widget.playlist.tapes;
     if (tapes == null || index < 0 || index >= tapes.length) return;
+    HapticFeedback.selectionClick();
+    _pushPlayer(tapes, index);
+  }
+
+  /// Shuffle the whole drawer and play it front to back.
+  void _shufflePlay() {
+    final tapes = widget.playlist.tapes;
+    if (tapes == null || tapes.isEmpty) return;
+    HapticFeedback.heavyImpact();
+    final order = ShufflePull.shuffledIndices(tapes.length,
+        seed: DateTime.now().millisecondsSinceEpoch);
+    final queue = [for (final i in order) tapes[i]];
+    _pushPlayer(queue, 0);
+  }
+
+  void _pushPlayer(List<CassetteTape> queue, int index) {
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -61,7 +94,7 @@ class _DrawerScreenState extends State<DrawerScreen>
         pageBuilder: (context, animation, _) => FadeTransition(
           opacity: animation,
           child: PlayerScreen(
-            queue: tapes,
+            queue: queue,
             index: index,
             spotifyService: widget.spotifyService,
             contextUri: widget.playlist.contextUri,
@@ -147,7 +180,9 @@ class _DrawerScreenState extends State<DrawerScreen>
                   ),
                 ),
                 Text(
-                  '${widget.playlist.tapes?.length ?? widget.playlist.trackCount} tapes · ${widget.playlist.owner}',
+                  '${widget.playlist.tapes?.length ?? widget.playlist.trackCount} tapes · ${widget.playlist.owner} · pull down to shuffle',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.robotoMono(
                     fontSize: 10,
                     color: const Color(0xFFF4EFE6).withValues(alpha: 0.55),
@@ -212,25 +247,64 @@ class _DrawerScreenState extends State<DrawerScreen>
   Widget _buildFelt() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(9),
-      child: Container(
-        decoration: const BoxDecoration(
-          // Felt interior.
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF2A1C12), Color(0xFF382515)],
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Fibrous felt lining with overhead light and shadowed corners.
+          const RepaintBoundary(
+            child: CustomPaint(painter: FeltPainter()),
           ),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _buildContent(),
-            // Inner walls shading all four sides for depth.
-            _innerShadow(Alignment.topCenter, Alignment.bottomCenter, 26),
-            _innerShadow(Alignment.bottomCenter, Alignment.topCenter, 26),
-            _innerShadowSide(left: true),
-            _innerShadowSide(left: false),
-          ],
+          _buildContent(),
+          // The shuffle stamp, inked in as the drawer is yanked down.
+          _buildShuffleStamp(),
+          // Inner walls shading all four sides for depth.
+          _innerShadow(Alignment.topCenter, Alignment.bottomCenter, 26),
+          _innerShadow(Alignment.bottomCenter, Alignment.topCenter, 26),
+          _innerShadowSide(left: true),
+          _innerShadowSide(left: false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShuffleStamp() {
+    return Positioned(
+      top: 20,
+      left: 0,
+      right: 0,
+      child: IgnorePointer(
+        child: Center(
+          child: Opacity(
+            opacity: _pull,
+            child: Transform.rotate(
+              angle: -0.10,
+              child: Transform.scale(
+                scale: 0.8 + 0.25 * _pull,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: const Color(0xFFC94F3D)
+                          .withValues(alpha: 0.55 + 0.45 * _pull),
+                      width: 2.5,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    _pull >= 1 ? 'RELEASE TO SHUFFLE' : 'SHUFFLE',
+                    style: GoogleFonts.robotoMono(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                      color: const Color(0xFFC94F3D)
+                          .withValues(alpha: 0.55 + 0.45 * _pull),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -278,6 +352,29 @@ class _DrawerScreenState extends State<DrawerScreen>
     );
   }
 
+  /// Watches the grid's overscroll: pulling the contents down past the
+  /// threshold arms the shuffle, which fires when the finger lets go.
+  bool _onScroll(ScrollNotification n) {
+    if (n is ScrollUpdateNotification || n is OverscrollNotification) {
+      final pulled = -n.metrics.pixels; // >0 when yanked past the top
+      final p = ShufflePull.progress(pulled);
+      if (p != _pull) setState(() => _pull = p);
+      if (p >= 1 && !_pullArmed) {
+        _pullArmed = true;
+        HapticFeedback.mediumImpact(); // the detent: far enough
+      } else if (p < 1 && _pullArmed && n is ScrollUpdateNotification) {
+        _pullArmed = false; // backed out before releasing
+      }
+    } else if (n is ScrollEndNotification) {
+      if (_pullArmed) {
+        _pullArmed = false;
+        _shufflePlay();
+      }
+      if (_pull != 0) setState(() => _pull = 0);
+    }
+    return false;
+  }
+
   Widget _buildContent() {
     if (widget.playlist.loading) {
       return const Center(
@@ -288,7 +385,7 @@ class _DrawerScreenState extends State<DrawerScreen>
         ),
       );
     }
-    final tapes = widget.playlist.tapes ?? const [];
+    final tapes = widget.playlist.tapes ?? const <CassetteTape>[];
     if (tapes.isEmpty) {
       return Center(
         child: Padding(
@@ -305,44 +402,167 @@ class _DrawerScreenState extends State<DrawerScreen>
         ),
       );
     }
-    return AnimatedBuilder(
-      animation: _enter,
-      builder: (context, _) => GridView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
-        physics: const BouncingScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: DrawerScreen.columns,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 6,
-          childAspectRatio: _spineW / _spineH,
+    final playingId = widget.spotifyService.nowPlaying?.id;
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: AnimatedBuilder(
+        animation: _enter,
+        builder: (context, _) => GridView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
+          physics: const BouncingScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: DrawerScreen.columns,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 6,
+            childAspectRatio: _spineW / _spineH,
+          ),
+          itemCount: tapes.length,
+          itemBuilder: (context, i) {
+            // Rows settle into the drawer one after another; each tape drops
+            // with a whisper of tilt that straightens as it seats.
+            final row = GridMath.rowOf(i, columns: DrawerScreen.columns);
+            final (ws, we) = GridMath.rowStaggerWindow(row);
+            final rise = Interval(ws, we, curve: Curves.easeOutBack)
+                .transform(_enter.value);
+            final fade =
+                Interval(ws, we, curve: Curves.easeOut).transform(_enter.value);
+            final tiltDir =
+                GridMath.colOf(i, columns: DrawerScreen.columns).isEven
+                    ? 1.0
+                    : -1.0;
+            final tape = tapes[i];
+            return Opacity(
+              opacity: fade,
+              child: Transform.translate(
+                offset: Offset(0, (1 - rise) * 22),
+                child: Transform.rotate(
+                  angle: (1 - rise) * 0.05 * tiltDir,
+                  child: _TapeSlot(
+                    tape: tape,
+                    isPlaying: tape.id == playingId,
+                    pulse: _pulse,
+                    spineWidth: _spineW,
+                    spineHeight: _spineH,
+                    onOpen: () => _openPlayer(i),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
-        itemCount: tapes.length,
-        itemBuilder: (context, i) {
-          // Rows settle into the drawer one after another.
-          final row = GridMath.rowOf(i, columns: DrawerScreen.columns);
-          final (ws, we) = GridMath.rowStaggerWindow(row);
-          final rise = Interval(ws, we, curve: Curves.easeOutBack)
-              .transform(_enter.value);
-          final fade =
-              Interval(ws, we, curve: Curves.easeOut).transform(_enter.value);
-          return Opacity(
-            opacity: fade,
-            child: Transform.translate(
-              offset: Offset(0, (1 - rise) * 22),
+      ),
+    );
+  }
+}
+
+/// One filing slot in the drawer: a recessed berth in the felt, the cassette
+/// spine seated in it (lifting slightly under the finger), and a breathing
+/// LED when this tape is the one playing.
+class _TapeSlot extends StatefulWidget {
+  final CassetteTape tape;
+  final bool isPlaying;
+  final Animation<double> pulse;
+  final double spineWidth;
+  final double spineHeight;
+  final VoidCallback onOpen;
+
+  const _TapeSlot({
+    required this.tape,
+    required this.isPlaying,
+    required this.pulse,
+    required this.spineWidth,
+    required this.spineHeight,
+    required this.onOpen,
+  });
+
+  @override
+  State<_TapeSlot> createState() => _TapeSlotState();
+}
+
+class _TapeSlotState extends State<_TapeSlot> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => setState(() => _pressed = true),
+      onPointerUp: (_) => setState(() => _pressed = false),
+      onPointerCancel: (_) => setState(() => _pressed = false),
+      child: AnimatedScale(
+        // The tape lifts out of its slot under the finger.
+        scale: _pressed ? 1.07 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
+        child: Stack(
+          children: [
+            // The recessed berth the tape stands in.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(7),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF1E1209), Color(0xFF2C1B0E)],
+                  ),
+                  border: Border.all(color: const Color(0x33000000)),
+                  boxShadow: const [
+                    // Light catching the slot's bottom lip.
+                    BoxShadow(
+                      color: Color(0x12FFFFFF),
+                      blurRadius: 0,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(3),
               child: FittedBox(
                 fit: BoxFit.contain,
                 child: SizedBox(
-                  width: _spineW,
-                  height: _spineH,
+                  width: widget.spineWidth,
+                  height: widget.spineHeight,
                   child: CassetteSpine(
-                    tape: tapes[i],
-                    onTap: () => _openPlayer(i),
+                    tape: widget.tape,
+                    onTap: widget.onOpen,
                   ),
                 ),
               ),
             ),
-          );
-        },
+            // Breathing LED marking the tape that's currently playing.
+            if (widget.isPlaying)
+              Positioned(
+                top: 5,
+                right: 7,
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: widget.pulse,
+                    builder: (context, _) {
+                      final glow = 0.35 + 0.65 * widget.pulse.value;
+                      return Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFE0483A),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFE0483A)
+                                  .withValues(alpha: 0.7 * glow),
+                              blurRadius: 7,
+                              spreadRadius: 1.2 * glow,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
