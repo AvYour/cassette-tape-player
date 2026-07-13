@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../widgets/cabinet_drawer.dart';
 import '../widgets/mini_player_bar.dart';
 import '../widgets/vintage_background.dart';
-import 'player_screen.dart';
+import 'drawer_screen.dart';
 import 'search_screen.dart';
 
 /// Home screen: a filing cabinet whose drawers are playlists. A built-in
@@ -26,6 +26,11 @@ class _CabinetScreenState extends State<CabinetScreen> {
   // Key of the currently open drawer; null = all closed.
   String? _openKey;
 
+  // The built-in starter mixtape drawer, shown while there are no Spotify
+  // playlists so the cabinet is explorable offline. Its tapes are preloaded,
+  // so loadPlaylistTracks() is a no-op for it.
+  late final Playlist _demoPlaylist = Playlist.demo();
+
   SpotifyService get svc => widget.spotifyService;
 
   @override
@@ -38,30 +43,51 @@ class _CabinetScreenState extends State<CabinetScreen> {
     });
   }
 
-  void _openPlayer(List<CassetteTape> queue, int index, String? contextUri) {
-    Navigator.push(
+  /// Pulls a drawer open: the POV swings from facing the cabinet to looking
+  /// straight down into the drawer (a perspective rotation on the incoming
+  /// route). The face stays "pulled" while the drawer view is open.
+  Future<void> _openDrawer(Playlist playlist) async {
+    HapticFeedback.mediumImpact(); // the tug of the drawer coming free
+    setState(() => _openKey = playlist.id);
+    svc.loadPlaylistTracks(playlist);
+    await Navigator.push(
       context,
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 450),
-        reverseTransitionDuration: const Duration(milliseconds: 450),
-        pageBuilder: (context, animation, _) => FadeTransition(
-          opacity: animation,
-          child: PlayerScreen(
-            queue: queue,
-            index: index,
-            spotifyService: svc,
-            contextUri: contextUri,
-          ),
-        ),
+        opaque: false,
+        transitionDuration: const Duration(milliseconds: 560),
+        reverseTransitionDuration: const Duration(milliseconds: 420),
+        pageBuilder: (context, animation, _) =>
+            DrawerScreen(playlist: playlist, spotifyService: svc),
+        transitionsBuilder: (context, animation, _, child) {
+          final t = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return AnimatedBuilder(
+            animation: t,
+            builder: (context, _) {
+              final v = t.value;
+              return Opacity(
+                opacity: v.clamp(0.0, 1.0),
+                child: Transform(
+                  // Lean-over-the-drawer POV: the view starts tipped away
+                  // (as if still facing the cabinet) and rotates flat, like
+                  // your eyes travelling up and over the open drawer.
+                  alignment: Alignment.topCenter,
+                  transform: Matrix4.identity()
+                    ..setEntry(3, 2, 0.0012)
+                    ..rotateX(-(1 - v) * 1.05)
+                    ..scaleByDouble(0.92 + 0.08 * v, 0.92 + 0.08 * v, 1, 1),
+                  child: child,
+                ),
+              );
+            },
+          );
+        },
       ),
     );
-  }
-
-  void _toggle(String key, {Playlist? playlist}) {
-    setState(() => _openKey = _openKey == key ? null : key);
-    if (_openKey == key && playlist != null) {
-      svc.loadPlaylistTracks(playlist);
-    }
+    if (mounted) setState(() => _openKey = null); // drawer pushed back in
   }
 
   @override
@@ -79,21 +105,33 @@ class _CabinetScreenState extends State<CabinetScreen> {
                     child: ListView(
                       padding: const EdgeInsets.only(bottom: 32, top: 4),
                       children: [
-                        // The user's own Spotify playlists as drawers.
-                        for (final pl in svc.playlists)
-                          CabinetDrawer(
-                            playlist: pl,
-                            isOpen: _openKey == pl.id,
-                            onTap: () => _toggle(pl.id, playlist: pl),
-                            loading: pl.loading,
-                            tapes: pl.tapes,
-                            loadError: pl.loadError,
-                            onTapeTap: _openPlayer,
+                        // The user's own Spotify playlists, filed as drawers
+                        // in one solid wooden cabinet. With no playlists yet,
+                        // the built-in starter mixtape keeps a drawer in it.
+                        if (svc.playlists.isNotEmpty || !svc.isLoading)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            child: _CabinetBody(
+                              children: [
+                                for (final pl in svc.playlists.isEmpty
+                                    ? [_demoPlaylist]
+                                    : svc.playlists)
+                                  CabinetDrawer(
+                                    playlist: pl,
+                                    isOpen: _openKey == pl.id,
+                                    onTap: () => _openDrawer(pl),
+                                    loadedCount: pl.tapes?.length,
+                                  ),
+                              ],
+                            ),
                           ),
                         if (svc.isLoading && svc.playlists.isEmpty)
                           _buildConnecting(),
-                        if (svc.statusMessage != null) _buildStatus(svc.statusMessage!),
-                        if (!svc.isConnected && !svc.isLoading) _buildConnectHint(),
+                        if (svc.statusMessage != null)
+                          _buildStatus(svc.statusMessage!),
+                        if (!svc.isConnected && !svc.isLoading)
+                          _buildConnectHint(),
                       ],
                     ),
                   ),
@@ -228,6 +266,95 @@ class _CabinetScreenState extends State<CabinetScreen> {
       ),
     );
   }
+}
+
+/// The cabinet carcass: one continuous timber body whose drawers sit flush in
+/// their openings — top plank, frame rails between drawers, a plinth and feet.
+/// This is what makes the home read as a real filing cabinet instead of an
+/// accordion of floating bars.
+class _CabinetBody extends StatelessWidget {
+  final List<Widget> children;
+
+  const _CabinetBody({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF8A5F3C), Color(0xFF69452A)],
+            ),
+            border: Border.all(color: const Color(0x40000000)),
+            boxShadow: [
+              // The cabinet stands in the room: one deep grounded shadow.
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 26,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Stack(
+              children: [
+                // Shared timber grain across the whole carcass.
+                Positioned.fill(
+                  child: CustomPaint(painter: WoodGrainPainter()),
+                ),
+                Padding(
+                  // Frame: sides and top are slim rails; the bottom is a
+                  // heavier plinth, like real casework.
+                  padding: const EdgeInsets.fromLTRB(10, 12, 10, 16),
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < children.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 8), // frame rail
+                        children[i],
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Feet, slightly inset from the corners.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 30),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [_foot(), _foot()],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _foot() => Container(
+        width: 54,
+        height: 12,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF5E3E27), Color(0xFF3E2817)],
+          ),
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 6,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+      );
 }
 
 class _RoundIconButton extends StatelessWidget {

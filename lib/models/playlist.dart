@@ -30,6 +30,22 @@ class Playlist {
     required this.accent,
   });
 
+  /// The built-in starter mixtape: a drawer that works with no Spotify account
+  /// so the cabinet is never empty. Its five tapes are preloaded (no fetch) and
+  /// carry real track URIs, so they also play for real once connected.
+  factory Playlist.demo() {
+    final demo = Playlist(
+      id: 'demo',
+      name: 'Starter Mixtape',
+      owner: 'Cassette',
+      ownerId: '',
+      trackCount: CassetteTape.demoTapes.length,
+      accent: kTapePalette[0].stripe,
+    );
+    demo.tapes = CassetteTape.demoTapes;
+    return demo;
+  }
+
   factory Playlist.fromJson(Map<String, dynamic> json, int index) {
     final owner = json['owner'] as Map<String, dynamic>? ?? {};
     final tracks = json['tracks'] as Map<String, dynamic>? ?? {};

@@ -1,65 +1,52 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
-import '../utils/colors.dart';
-import 'cassette_spine.dart';
 
-/// A filing-cabinet drawer representing one playlist. Closed, it shows a wooden
-/// drawer face with a metal handle and label. Tapping pulls the drawer open —
-/// it slides forward and a recessed tray of upright cassettes is revealed.
+/// A filing-cabinet drawer representing one playlist, meant to sit flush
+/// inside the cabinet carcass (see `_CabinetBody` in the cabinet screen). The
+/// wooden face rests in a dark drawer OPENING — the recessed gap you'd see
+/// around a real drawer front — rather than floating like a list card.
+/// Tapping it swings the POV over the drawer (the cabinet screen pushes
+/// [DrawerScreen]); while that view is open the face holds its "pulled" pose.
 class CabinetDrawer extends StatelessWidget {
   final Playlist playlist;
   final bool isOpen;
   final VoidCallback onTap;
-  final bool loading;
-  final List<CassetteTape>? tapes;
-  final String? loadError;
-  final void Function(List<CassetteTape> queue, int index, String? contextUri)
-      onTapeTap;
+  final int? loadedCount;
 
   const CabinetDrawer({
     super.key,
     required this.playlist,
     required this.isOpen,
     required this.onTap,
-    required this.loading,
-    required this.tapes,
-    this.loadError,
-    required this.onTapeTap,
+    this.loadedCount,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Column(
-        children: [
-          _DrawerFace(
-            playlist: playlist,
-            isOpen: isOpen,
-            onTap: onTap,
-            loadedCount: tapes?.length,
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeOutCubic,
-            clipBehavior: Clip.none,
-            child: isOpen
-                ? _DrawerTray(
-                    loading: loading,
-                    tapes: tapes,
-                    loadError: loadError,
-                    // Inject this playlist's context so playback mirrors it in
-                    // Spotify's own queue (downstream keeps the simpler 2-arg
-                    // callback).
-                    onTapeTap: (q, i) => onTapeTap(q, i, playlist.contextUri),
-                  )
-                : const SizedBox(width: double.infinity, height: 0),
+    return Container(
+      decoration: BoxDecoration(
+        // The dark cavity behind/around the drawer front.
+        color: const Color(0xFF20130A),
+        borderRadius: BorderRadius.circular(7),
+        boxShadow: const [
+          // A hairline of light catching the opening's lower lip.
+          BoxShadow(
+            color: Color(0x14FFFFFF),
+            blurRadius: 0,
+            offset: Offset(0, 1),
           ),
         ],
+      ),
+      // The face sits proud of its opening: a slim, even gap at the sides and
+      // a deeper shadow gap below.
+      padding: const EdgeInsets.fromLTRB(3, 3, 3, 6),
+      child: _DrawerFace(
+        playlist: playlist,
+        isOpen: isOpen,
+        onTap: onTap,
+        loadedCount: loadedCount,
       ),
     );
   }
@@ -79,7 +66,8 @@ class _DrawerFace extends StatelessWidget {
   });
 
   String get _subtitle {
-    final count = loadedCount ?? (playlist.trackCount > 0 ? playlist.trackCount : null);
+    final count =
+        loadedCount ?? (playlist.trackCount > 0 ? playlist.trackCount : null);
     final prefix = count != null ? '$count tapes · ' : '';
     return '$prefix${playlist.owner}';
   }
@@ -88,92 +76,114 @@ class _DrawerFace extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
+      child: AnimatedScale(
+        // The face swells a touch when pulled, as if it came toward you.
+        scale: isOpen ? 1.015 : 1.0,
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,
-        height: 76,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.vertical(
-            top: const Radius.circular(10),
-            bottom: Radius.circular(isOpen ? 2 : 10),
-          ),
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isOpen
-                ? const [Color(0xFF6E4A2E), Color(0xFF573923)]
-                : const [Color(0xFF7C5537), Color(0xFF5E3E27)],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isOpen ? 0.5 : 0.3),
-              blurRadius: isOpen ? 14 : 8,
-              offset: Offset(0, isOpen ? 8 : 4),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          height: 76,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(5),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isOpen
+                  ? const [Color(0xFF6E4A2E), Color(0xFF573923)]
+                  : const [Color(0xFF7C5537), Color(0xFF5E3E27)],
             ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Wood grain + bevel.
-            Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.vertical(
-                  top: const Radius.circular(10),
-                  bottom: Radius.circular(isOpen ? 2 : 10),
+            boxShadow: [
+              // Seated in its opening the face casts only a sliver of shadow;
+              // pulled, it floats forward with a deeper one.
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isOpen ? 0.5 : 0.35),
+                blurRadius: isOpen ? 14 : 3,
+                offset: Offset(0, isOpen ? 8 : 2),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Wood grain + bevel.
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: CustomPaint(painter: WoodGrainPainter()),
                 ),
-                child: CustomPaint(painter: _WoodGrainPainter()),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Row(
-                children: [
-                  // Accent color chip for the playlist.
-                  Container(
-                    width: 6,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: playlist.accent,
-                      borderRadius: BorderRadius.circular(3),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Row(
+                  children: [
+                    // Accent color chip for the playlist.
+                    Container(
+                      width: 6,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: playlist.accent,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          playlist.name.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.robotoMono(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFFF4EFE6),
-                            letterSpacing: 1,
-                          ),
+                    const SizedBox(width: 14),
+                    // A card in a brass label holder, like a real card-catalog
+                    // drawer — the label is paper, not paint on the wood.
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF2E9D4),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: const Color(0xFFB08D57), width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.35),
+                              blurRadius: 3,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.robotoMono(
-                            fontSize: 10,
-                            color: const Color(0xFFF4EFE6).withValues(alpha: 0.6),
-                          ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              playlist.name.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.robotoMono(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF2C2117),
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              _subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.robotoMono(
+                                fontSize: 9.5,
+                                color: const Color(0xFF2C2117)
+                                    .withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Recessed metal cup handle with mounting screws.
-                  _CupHandle(open: isOpen),
-                ],
+                    const SizedBox(width: 12),
+                    // Recessed metal cup handle with mounting screws.
+                    _CupHandle(open: isOpen),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -253,8 +263,9 @@ class _CupHandle extends StatelessWidget {
       );
 }
 
-/// Paints warm wood tones with faint horizontal grain and a top bevel.
-class _WoodGrainPainter extends CustomPainter {
+/// Paints warm wood tones with faint horizontal grain and a top bevel. Public
+/// so the cabinet carcass (cabinet screen) shares the same timber.
+class WoodGrainPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rnd = math.Random(7);
@@ -281,187 +292,5 @@ class _WoodGrainPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WoodGrainPainter old) => false;
-}
-
-class _DrawerTray extends StatelessWidget {
-  final bool loading;
-  final List<CassetteTape>? tapes;
-  final String? loadError;
-  final void Function(List<CassetteTape> queue, int index) onTapeTap;
-
-  const _DrawerTray({
-    required this.loading,
-    required this.tapes,
-    required this.loadError,
-    required this.onTapeTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Clip the sides and bottom to the drawer, but leave the TOP open so the
-    // raised (focused) cassette can rise out of the drawer instead of being cut.
-    return ClipRect(
-      clipper: const _TopOpenClipper(overflow: 64),
-      child: Container(
-        width: double.infinity,
-        height: 256,
-        decoration: const BoxDecoration(
-          // Recessed inside-of-drawer look.
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF2A1C12), Color(0xFF3A2717)],
-          ),
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
-        ),
-        child: _buildContent(),
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    if (loading) {
-      return const Center(
-        child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(strokeWidth: 2, color: kGold),
-        ),
-      );
-    }
-    final list = tapes ?? const [];
-    if (list.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            loadError ?? 'Empty drawer',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.robotoMono(
-              fontSize: 11,
-              height: 1.4,
-              color: const Color(0xFFF4EFE6).withValues(alpha: 0.6),
-            ),
-          ),
-        ),
-      );
-    }
-    // Filed tapes in a coverflow: the centred one lifts out of the drawer.
-    return _SpineCarousel(tapes: list, onTapeTap: onTapeTap);
-  }
-}
-
-/// Tightly filed cassette spines that scroll horizontally inside the drawer,
-/// starting flush at the left. Whichever spine passes the drawer's focus line
-/// rises and enlarges, as if being lifted from the row. Tap any spine to open.
-class _SpineCarousel extends StatefulWidget {
-  final List<CassetteTape> tapes;
-  final void Function(List<CassetteTape> queue, int index) onTapeTap;
-
-  const _SpineCarousel({required this.tapes, required this.onTapeTap});
-
-  @override
-  State<_SpineCarousel> createState() => _SpineCarouselState();
-}
-
-class _SpineCarouselState extends State<_SpineCarousel> {
-  final ScrollController _sc = ScrollController();
-  double _offset = 0;
-  double _focusX = 0;
-  int _focused = 0;
-
-  static const double _itemW = CassetteSpine.width;
-  static const double _gap = 4;
-  static const double _extent = _itemW + _gap; // packed slot width
-  static const double _leftPad = 14;
-
-  @override
-  void initState() {
-    super.initState();
-    _sc.addListener(() {
-      if (!_sc.hasClients) return;
-      setState(() => _offset = _sc.offset);
-      // A tactile detent each time a new cassette slides under the focus line.
-      final f = ((_offset + _focusX - _leftPad - _itemW / 2) / _extent)
-          .round()
-          .clamp(0, widget.tapes.length - 1);
-      if (f != _focused) {
-        _focused = f;
-        HapticFeedback.selectionClick();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _sc.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final focusX = constraints.maxWidth * 0.42;
-        _focusX = focusX;
-        return ListView.builder(
-          controller: _sc,
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          // Don't clip vertically — the raised spine rises out of the drawer;
-          // the tray's ClipRect keeps the sides/bottom contained.
-          clipBehavior: Clip.none,
-          itemExtent: _extent,
-          padding: EdgeInsets.only(
-            left: _leftPad,
-            right: constraints.maxWidth - _extent - _leftPad,
-            top: 34,
-            bottom: 10,
-          ),
-          itemCount: widget.tapes.length,
-          itemBuilder: (context, i) {
-            final itemCenter = _leftPad + i * _extent + _itemW / 2 - _offset;
-            final dist =
-                ((itemCenter - focusX).abs() / (_extent * 1.7)).clamp(0.0, 1.0);
-            final scale = 1.16 - 0.26 * dist;
-            final lift = (1 - dist) * 30;
-            final tape = widget.tapes[i];
-            return Align(
-              alignment: Alignment.bottomCenter,
-              child: Transform.translate(
-                offset: Offset(0, -lift),
-                child: Transform.scale(
-                  scale: scale,
-                  alignment: Alignment.bottomCenter,
-                  child: SizedBox(
-                    width: _itemW,
-                    child: CassetteSpine(
-                      tape: tape,
-                      onTap: () => widget.onTapeTap(widget.tapes, i),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-/// Clips left/right/bottom to the drawer but leaves [overflow] pixels open at
-/// the top so a raised cassette can rise out of the drawer.
-class _TopOpenClipper extends CustomClipper<Rect> {
-  final double overflow;
-
-  const _TopOpenClipper({required this.overflow});
-
-  @override
-  Rect getClip(Size size) =>
-      Rect.fromLTRB(0, -overflow, size.width, size.height);
-
-  @override
-  bool shouldReclip(_TopOpenClipper old) => old.overflow != overflow;
+  bool shouldRepaint(WoodGrainPainter old) => false;
 }

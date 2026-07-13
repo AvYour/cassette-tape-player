@@ -80,10 +80,16 @@ lib/
 │   └── sound_service.dart         # cassette SFX + button click (audioplayers)
 ├── painters/
 │   └── cassette_tape_painter.dart # CassetteBasePainter / CassetteHubsPainter / CassetteFrontPainter (1:1 from reference)
+├── utils/
+│   ├── playback_math.dart         # pure position/lyric maths (poll gating, end detect) — unit-tested
+│   ├── lru_cache.dart             # bounded LRU with negative caching (lyrics)
+│   ├── image_pick.dart            # picks right-sized Spotify image (thumb vs full art)
+│   ├── playlist_paging.dart       # /items page → tapes, true contextIndex, ghost filtering
+│   └── grid_math.dart             # drawer grid rows/cols + row stagger windows
 ├── widgets/
 │   ├── cassette_tape_view.dart    # full cassette (album art AS the body), rotating hero flight, ReelAngles
 │   ├── cassette_spine.dart        # thin filed spine (album-art cap + cream label) for drawers
-│   ├── cabinet_drawer.dart        # drawer face (wood + cup handle) + coverflow carousel of spines (haptic on scroll)
+│   ├── cabinet_drawer.dart        # drawer FACE ONLY, seated in a dark opening; brass label card; WoodGrainPainter (public)
 │   ├── mini_player_bar.dart       # Spotify-style now-playing bar (cabinet/search bottom)
 │   ├── dynamic_background.dart    # animated album-color glow, transitions with lyric progress
 │   ├── lyrics_view.dart           # center-focused scrolling lyric reel
@@ -91,7 +97,11 @@ lib/
 │   ├── skeuo_button.dart          # piano-key transport buttons (haptic + click sound)
 │   ├── eject_button.dart, volume_tuner.dart, tape_color_builder.dart, vintage_background.dart
 └── screens/
-    ├── cabinet_screen.dart        # home: drawers + search icon + mini-bar + connect button
+    ├── cabinet_screen.dart        # home: ONE wooden cabinet carcass (_CabinetBody: rails, plinth, feet)
+    │                              #   holding drawer faces; starter-mixtape drawer when no playlists;
+    │                              #   tap = POV route (perspective rotateX) into drawer_screen
+    ├── drawer_screen.dart         # top-down INTO the drawer: wooden rim + felt, vertical grid of
+    │                              #   spines (5/row, GridMath), rows settle in staggered
     ├── search_screen.dart         # live Spotify search (rows w/ art) + mini-bar
     └── player_screen.dart         # the player (reels, lyrics, panel, dynamic bg, queue playback)
 ```
@@ -164,8 +174,10 @@ in `pubspec.yaml`. Do not delete.
   shell tint anymore.
 - **Dynamic color** is used only for the **player background** (`dynamic_background.dart`) — album
   swatches that flow AND shift hue as the lyric progress advances.
-- Drawer spines: narrow cassette, big cream label; the centred spine **rises out of the drawer**
-  (tray clips sides/bottom only via `_TopOpenClipper`, `Clip.none` on carousel/AnimatedSize).
+- Drawers: the home cabinet is one carcass; **tapping a drawer pushes `DrawerScreen`** with a
+  lean-over POV transition (perspective `rotateX` on the route). Inside, spines are filed in a
+  **vertical 5-per-row grid** (`DrawerScreen.columns`), rows entering staggered (`GridMath`).
+  The old horizontal coverflow carousel was removed (user preference).
 
 ### Sound / haptics
 - `sound_service.dart` (audioplayers): `tapeStart` (insert.mp3), `tapeStop` (close.mp3),
