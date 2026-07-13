@@ -26,6 +26,18 @@ class WallpaperPainter extends CustomPainter {
       canvas.drawRect(Rect.fromLTWH(x, 0, 9, size.height), stripe);
     }
 
+    // Evening light through venetian blinds, striping the right of the wall.
+    canvas.save();
+    canvas.translate(size.width * 0.62, -30);
+    canvas.rotate(0.42);
+    final band = Paint()
+      ..color = const Color(0xFFFFE7B8).withValues(alpha: 0.05);
+    for (var i = 0; i < 5; i++) {
+      canvas.drawRect(
+          Rect.fromLTWH(-size.width, i * 36.0, size.width * 2, 13), band);
+    }
+    canvas.restore();
+
     // Lamp glow, high on the left of the wall.
     canvas.drawRect(
       rect,

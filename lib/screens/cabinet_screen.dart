@@ -276,18 +276,28 @@ class _Poster extends StatelessWidget {
               ],
             ),
           ),
-          // Pushpin.
+          // Aged sticky tape holding the top corners to the wall.
           Positioned(
             top: -4,
-            left: 52,
-            child: Container(
-              width: 9,
-              height: 9,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [Color(0xFFE0483A), Color(0xFF7E2018)],
-                ),
+            left: -7,
+            child: Transform.rotate(
+              angle: -0.72,
+              child: Container(
+                width: 28,
+                height: 10,
+                color: const Color(0xFFF4EFE6).withValues(alpha: 0.30),
+              ),
+            ),
+          ),
+          Positioned(
+            top: -4,
+            right: -7,
+            child: Transform.rotate(
+              angle: 0.72,
+              child: Container(
+                width: 28,
+                height: 10,
+                color: const Color(0xFFF4EFE6).withValues(alpha: 0.30),
               ),
             ),
           ),

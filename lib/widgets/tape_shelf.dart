@@ -211,19 +211,12 @@ class _SpineRow extends StatelessWidget {
         );
         return SizedBox(
           height: _maxH,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (final look in looks)
-                Padding(
-                  padding: const EdgeInsets.only(right: _gap),
-                  child: Transform.rotate(
-                    angle: look.leansLeft ? -0.07 : 0,
-                    alignment: Alignment.bottomCenter,
-                    child: _Spine(look: look),
-                  ),
-                ),
-            ],
+          width: double.infinity,
+          child: CustomPaint(
+            painter: _SpinesPainter(
+              looks: looks,
+              seedKey: playlist.id.hashCode ^ visible,
+            ),
           ),
         );
       },
@@ -231,60 +224,100 @@ class _SpineRow extends StatelessWidget {
   }
 }
 
-class _Spine extends StatelessWidget {
-  final SpineLook look;
+/// Paints a whole row of spines in one pass, with the same material care as
+/// the cassette painters: curved plastic (light edge into shadowed edge), a
+/// lit top arris, a paper label with faint print scratches, an accent stripe,
+/// and a soft contact shadow where each tape meets the board.
+class _SpinesPainter extends CustomPainter {
+  final List<SpineLook> looks;
+  final int seedKey;
 
-  const _Spine({required this.look});
+  const _SpinesPainter({required this.looks, required this.seedKey});
+
+  static const double _w = _SpineRow._spineW;
+  static const double _gap = _SpineRow._gap;
 
   @override
-  Widget build(BuildContext context) {
-    final palette = kTapePalette[look.paletteIndex];
-    return Container(
-      width: _SpineRow._spineW,
-      height: _SpineRow._maxH * look.heightFactor,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(1.5),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            palette.body,
-            Color.lerp(palette.body, Colors.black, 0.3)!,
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 2,
-            offset: const Offset(1, 2),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // The little cream label band near the top of the spine.
-          Positioned(
-            top: 5,
-            left: 1.5,
-            right: 1.5,
-            height: 8,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: palette.label,
-                borderRadius: BorderRadius.circular(1),
-              ),
-            ),
-          ),
-          // Its accent stripe.
-          Positioned(
-            top: 15,
-            left: 1.5,
-            right: 1.5,
-            height: 2,
-            child: ColoredBox(color: palette.stripe),
-          ),
-        ],
-      ),
-    );
+  void paint(Canvas canvas, Size size) {
+    for (var i = 0; i < looks.length; i++) {
+      final look = looks[i];
+      final palette = kTapePalette[look.paletteIndex];
+      final x = i * (_w + _gap);
+      final h = size.height * look.heightFactor;
+      final top = size.height - h;
+
+      canvas.save();
+      if (look.leansLeft) {
+        canvas.translate(x + _w / 2, size.height);
+        canvas.rotate(-0.07);
+        canvas.translate(-(x + _w / 2), -size.height);
+      }
+
+      // Contact shadow where the tape meets the shelf board.
+      canvas.drawOval(
+        Rect.fromLTWH(x - 1, size.height - 2.5, _w + 3, 4),
+        Paint()
+          ..color = Colors.black.withValues(alpha: 0.32)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5),
+      );
+
+      // Curved plastic shell: lit on the left, rolling into shadow.
+      final body = RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, top, _w, h), const Radius.circular(1.5));
+      canvas.drawRRect(
+        body,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Color.lerp(palette.body, Colors.white, 0.18)!,
+              palette.body,
+              Color.lerp(palette.body, Colors.black, 0.35)!,
+            ],
+            stops: const [0.0, 0.32, 1.0],
+          ).createShader(Rect.fromLTWH(x, top, _w, h)),
+      );
+
+      // Light on the top arris.
+      canvas.drawLine(
+        Offset(x + 0.6, top + 0.7),
+        Offset(x + _w - 0.6, top + 0.7),
+        Paint()
+          ..strokeWidth = 1
+          ..color = Colors.white.withValues(alpha: 0.30),
+      );
+
+      // Paper label with faint print scratches.
+      final label = RRect.fromRectAndRadius(
+          Rect.fromLTWH(x + 1.5, top + 5, _w - 3, 8), const Radius.circular(1));
+      canvas.drawRRect(label, Paint()..color = palette.label);
+      final scratch = Paint()
+        ..strokeWidth = 0.6
+        ..color = const Color(0xFF33261A).withValues(alpha: 0.35);
+      canvas.drawLine(
+          Offset(x + 3, top + 7.6), Offset(x + _w - 3, top + 7.6), scratch);
+      canvas.drawLine(
+          Offset(x + 3, top + 10.2), Offset(x + _w - 4.5, top + 10.2), scratch);
+
+      // Accent stripe under the label.
+      canvas.drawRect(Rect.fromLTWH(x + 1.5, top + 15, _w - 3, 2),
+          Paint()..color = palette.stripe);
+
+      // The right edge falls into the gap between tapes.
+      canvas.drawLine(
+        Offset(x + _w - 0.6, top + 1),
+        Offset(x + _w - 0.6, size.height - 1),
+        Paint()
+          ..strokeWidth = 1
+          ..color = Colors.black.withValues(alpha: 0.2),
+      );
+
+      canvas.restore();
+    }
   }
+
+  @override
+  bool shouldRepaint(_SpinesPainter old) =>
+      old.seedKey != seedKey || old.looks.length != looks.length;
 }
