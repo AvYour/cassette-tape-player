@@ -23,13 +23,43 @@ class CabinetScreen extends StatefulWidget {
   State<CabinetScreen> createState() => _CabinetScreenState();
 }
 
-class _CabinetScreenState extends State<CabinetScreen> {
+class _CabinetScreenState extends State<CabinetScreen>
+    with SingleTickerProviderStateMixin {
   // The built-in starter mixtape shelf, shown while there are no Spotify
   // playlists so the room is explorable offline. Its tapes are preloaded,
   // so loadPlaylistTracks() is a no-op for it.
   late final Playlist _demoPlaylist = Playlist.demo();
 
+  // Walking into the room: its furniture settles in one piece after another.
+  late final AnimationController _enter = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 750),
+  )..forward();
+
   SpotifyService get svc => widget.spotifyService;
+
+  @override
+  void dispose() {
+    _enter.dispose();
+    super.dispose();
+  }
+
+  /// Fades + settles a piece of the room in its own slice of the timeline.
+  Widget _settle(int slot, Widget child) {
+    return AnimatedBuilder(
+      animation: _enter,
+      builder: (context, _) {
+        final t =
+            Interval(slot * 0.12, slot * 0.12 + 0.5, curve: Curves.easeOutCubic)
+                .transform(_enter.value);
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(
+              offset: Offset(0, (1 - t) * 16), child: child),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -133,7 +163,7 @@ class _CabinetScreenState extends State<CabinetScreen> {
                     svc.playlists.isEmpty ? [_demoPlaylist] : svc.playlists;
                 return Column(
                   children: [
-                    _buildHeader(),
+                    _settle(0, _buildHeader()),
                     // The wall: poster + a pinned note.
                     SizedBox(
                       height: 142,
@@ -142,25 +172,32 @@ class _CabinetScreenState extends State<CabinetScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _Poster(service: svc),
+                            _settle(1, _Poster(service: svc)),
                             const SizedBox(width: 16),
-                            Expanded(child: _WallNote(service: svc)),
+                            Expanded(
+                                child: _settle(2, _WallNote(service: svc))),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 14),
                     Expanded(
-                      child: TapeShelf(
-                        playlists: shelves,
-                        onOpen: _openDrawer,
+                      child: _settle(
+                        3,
+                        TapeShelf(
+                          playlists: shelves,
+                          onOpen: _openDrawer,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    DeskDeck(
-                      service: svc,
-                      onOpenPlayer: _openNowPlaying,
-                      onOpenSearch: _openSearch,
+                    _settle(
+                      4,
+                      DeskDeck(
+                        service: svc,
+                        onOpenPlayer: _openNowPlaying,
+                        onOpenSearch: _openSearch,
+                      ),
                     ),
                   ],
                 );

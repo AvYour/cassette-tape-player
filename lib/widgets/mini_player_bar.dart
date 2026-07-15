@@ -58,6 +58,9 @@ class MiniPlayerBar extends StatelessWidget {
                     end: Alignment.bottomCenter,
                     colors: [Color(0xFF2A2724), Color(0xFF17150F)],
                   ),
+                  border: const Border(
+                    top: BorderSide(color: Color(0x14FFFFFF), width: 1),
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.4),
@@ -68,6 +71,16 @@ class MiniPlayerBar extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
+                    // The loaded tape's accent stripe.
+                    Container(
+                      width: 4,
+                      height: 40,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: tape.stripeColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                     // Album art thumbnail.
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),
@@ -105,7 +118,8 @@ class MiniPlayerBar extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.courierPrime(
                               fontSize: 11,
-                              color: const Color(0xFFF4EFE6).withValues(alpha: 0.6),
+                              color: const Color(0xFFF4EFE6)
+                                  .withValues(alpha: 0.6),
                             ),
                           ),
                         ],

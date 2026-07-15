@@ -64,8 +64,9 @@ class TapeShelf extends StatelessWidget {
 }
 
 /// One shelf: the dark inside of the case, a row of tapes standing on the
-/// board, and a small brass plaque with the playlist's name.
-class _ShelfRow extends StatelessWidget {
+/// board, and a small brass plaque with the playlist's name. Pressing it
+/// eases the whole shelf toward you before the POV swings over.
+class _ShelfRow extends StatefulWidget {
   final Playlist playlist;
   final VoidCallback onTap;
 
@@ -74,107 +75,126 @@ class _ShelfRow extends StatelessWidget {
   static const double _height = 98;
   static const double _board = 16;
 
+  @override
+  State<_ShelfRow> createState() => _ShelfRowState();
+}
+
+class _ShelfRowState extends State<_ShelfRow> {
+  bool _pressed = false;
+
+  Playlist get playlist => widget.playlist;
+
   int get _trackCount =>
       playlist.tapes?.length ??
       (playlist.trackCount > 0 ? playlist.trackCount : 0);
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        height: _height,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Inside of the case, falling into shadow behind the tapes.
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              bottom: _board - 2,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF1D1006), Color(0xFF33200F)],
-                  ),
-                ),
-              ),
-            ),
-            // The filed tapes.
-            Positioned(
-              left: 8,
-              right: 8,
-              bottom: _board - 1,
-              child: _SpineRow(playlist: playlist, trackCount: _trackCount),
-            ),
-            // The shelf board they stand on.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: _board,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(3),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF9A6C44), Color(0xFF6B4629)],
-                  ),
-                  border: const Border(
-                    top: BorderSide(color: Color(0x2EFFFFFF), width: 1),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      blurRadius: 3,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Brass plaque on the board's face.
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 1.5,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(2.5),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFFD9BC7D), Color(0xFF8F6F3F)],
-                    ),
-                    border:
-                        Border.all(color: const Color(0xFF5E4726), width: 0.7),
-                  ),
-                  child: Text(
-                    _trackCount > 0
-                        ? '${playlist.name.toUpperCase()} · $_trackCount'
-                        : playlist.name.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.robotoMono(
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                      color: const Color(0xFF3A2B14),
+    return Listener(
+      onPointerDown: (_) => setState(() => _pressed = true),
+      onPointerUp: (_) => setState(() => _pressed = false),
+      onPointerCancel: (_) => setState(() => _pressed = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 1.02 : 1.0,
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOut,
+          child: SizedBox(
+            height: _ShelfRow._height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Inside of the case, falling into shadow behind the tapes.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: _ShelfRow._board - 2,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF1D1006), Color(0xFF33200F)],
+                      ),
                     ),
                   ),
                 ),
-              ),
+                // The filed tapes.
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: _ShelfRow._board - 1,
+                  child: _SpineRow(playlist: playlist, trackCount: _trackCount),
+                ),
+                // The shelf board they stand on.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: _ShelfRow._board,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(3),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF9A6C44), Color(0xFF6B4629)],
+                      ),
+                      border: const Border(
+                        top: BorderSide(color: Color(0x2EFFFFFF), width: 1),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 3,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Brass plaque on the board's face.
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 1.5,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2.5),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFFD9BC7D), Color(0xFF8F6F3F)],
+                        ),
+                        border: Border.all(
+                            color: const Color(0xFF5E4726), width: 0.7),
+                      ),
+                      child: Text(
+                        _trackCount > 0
+                            ? '${playlist.name.toUpperCase()} · $_trackCount'
+                            : playlist.name.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.robotoMono(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                          color: const Color(0xFF3A2B14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

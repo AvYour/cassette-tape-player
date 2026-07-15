@@ -7,6 +7,7 @@ import 'package:spotify_sdk/models/player_state.dart';
 import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
 import '../models/track_info.dart';
+import '../utils/debouncer.dart';
 import '../utils/lru_cache.dart';
 import '../utils/playlist_paging.dart';
 import 'spotify_auth.dart';
@@ -169,6 +170,15 @@ class SpotifyService extends ChangeNotifier {
     var res = await http.get(uri, headers: _authHeader);
     if (res.statusCode == 401 && await SpotifyAuth.authorizeInteractive()) {
       res = await http.get(uri, headers: _authHeader);
+    }
+    return res;
+  }
+
+  /// PUT with the same expired-token retry as [_authedGet].
+  Future<http.Response> _authedPut(Uri uri) async {
+    var res = await http.put(uri, headers: _authHeader);
+    if (res.statusCode == 401 && await SpotifyAuth.authorizeInteractive()) {
+      res = await http.put(uri, headers: _authHeader);
     }
     return res;
   }
@@ -459,14 +469,28 @@ class SpotifyService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // spotify_sdk 3.x has no volume API; volume knob adjusts system/app volume
-  // only as a UI affordance. Kept as a hook for future SDK support.
-  Future<void> setVolume(int volume) async {}
+  // The volume knob drives the real playback volume via the Web API (the
+  // native SDK has no volume call). Debounced so a knob drag sends one
+  // request, not dozens; scope user-modify-playback-state is already granted.
+  final Debouncer _volumeDebounce =
+      Debouncer(const Duration(milliseconds: 250));
+
+  Future<void> setVolume(int volume) async {
+    if (!_isConnected || !hasWebApi) return;
+    final percent = volume.clamp(0, 100);
+    _volumeDebounce.run(() async {
+      try {
+        await _authedPut(Uri.parse(
+            'https://api.spotify.com/v1/me/player/volume?volume_percent=$percent'));
+      } catch (_) {}
+    });
+  }
 
   @override
   void dispose() {
     _demoTimer?.cancel();
     _playerSub?.cancel();
+    _volumeDebounce.dispose();
     super.dispose();
   }
 }

@@ -377,11 +377,25 @@ class _DrawerScreenState extends State<DrawerScreen>
 
   Widget _buildContent() {
     if (widget.playlist.loading) {
-      return const Center(
-        child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(strokeWidth: 2, color: kGold),
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 2, color: kGold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'REWINDING…',
+              style: GoogleFonts.robotoMono(
+                fontSize: 10,
+                letterSpacing: 3,
+                color: const Color(0xFFF4EFE6).withValues(alpha: 0.5),
+              ),
+            ),
+          ],
         ),
       );
     }
