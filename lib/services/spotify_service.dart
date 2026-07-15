@@ -309,8 +309,12 @@ class SpotifyService extends ChangeNotifier {
     if (_infoCache.containsKey(tape.id)) return _infoCache.get(tape.id);
     if (!hasWebApi) return null;
     try {
-      final res = await _authedGet(Uri.parse(
-          'https://api.spotify.com/v1/tracks/${tape.id}?market=from_token'));
+      // Deliberately NO market param here: with one, Spotify relinks to a
+      // regional duplicate of the track, and popularity is scored per catalog
+      // entry — the duplicates all sit at 0. The canonical entry carries the
+      // real number (we only need metadata, not playability, from this call).
+      final res = await _authedGet(
+          Uri.parse('https://api.spotify.com/v1/tracks/${tape.id}'));
       if (res.statusCode != 200) {
         _infoCache.put(tape.id, null);
         return null;
@@ -331,6 +335,11 @@ class SpotifyService extends ChangeNotifier {
         }
       }
       final info = TrackInfo.fromJson(trackJson, artistJson: artistJson);
+      if (kDebugMode && info.popularity == 0) {
+        // Evidence for the next debugging round if Spotify really sends none.
+        debugPrint('TrackInfo debug: popularity=0 for "${info.title}"; '
+            'track keys: ${trackJson.keys.toList()}');
+      }
       _infoCache.put(tape.id, info);
       return info;
     } catch (_) {

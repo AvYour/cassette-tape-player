@@ -50,6 +50,32 @@ void main() {
     });
   });
 
+  group('TrackInfo popularity shapes', () {
+    test('reads a popularity nested under stats (moved-field APIs)', () {
+      final t = _track()
+        ..remove('popularity')
+        ..['stats'] = {'popularity': 64};
+      expect(TrackInfo.fromJson(t).popularity, 64);
+    });
+
+    test('reads a string-typed popularity', () {
+      final t = _track()..['popularity'] = '73';
+      expect(TrackInfo.fromJson(t).popularity, 73);
+    });
+
+    test('reads a popularity_index fallback', () {
+      final t = _track()
+        ..remove('popularity')
+        ..['popularity_index'] = 55;
+      expect(TrackInfo.fromJson(t).popularity, 55);
+    });
+
+    test('a zero canonical popularity stays zero (no invention)', () {
+      final t = _track()..['popularity'] = 0;
+      expect(TrackInfo.fromJson(t).popularity, 0);
+    });
+  });
+
   group('TrackInfo.formatCount', () {
     test('groups thousands with separators', () {
       expect(TrackInfo.formatCount(0), '0');

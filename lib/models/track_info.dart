@@ -44,11 +44,30 @@ class TrackInfo {
       durationMs: (track['duration_ms'] as int?) ?? 0,
       trackNumber: (track['track_number'] as int?) ?? 0,
       explicit: (track['explicit'] as bool?) ?? false,
-      popularity: (track['popularity'] as int?) ?? 0,
+      popularity: _popularityOf(track),
       genres:
           ((artistJson?['genres'] as List?) ?? []).whereType<String>().toList(),
       artistFollowers: followers is Map ? followers['total'] as int? : null,
     );
+  }
+
+  /// Popularity, wherever this API version put it: the classic top-level
+  /// `popularity` (int or numeric string), nested under `stats`/`statistics`,
+  /// or a flat `popularity_index`. Missing entirely → 0.
+  static int _popularityOf(Map<String, dynamic> track) {
+    int? asInt(Object? v) =>
+        v is int ? v : (v is String ? int.tryParse(v) : null);
+
+    final direct = asInt(track['popularity']);
+    if (direct != null) return direct;
+    for (final key in ['stats', 'statistics']) {
+      final nested = track[key];
+      if (nested is Map) {
+        final p = asInt(nested['popularity']);
+        if (p != null) return p;
+      }
+    }
+    return asInt(track['popularity_index']) ?? 0;
   }
 
   /// 1234567 → '1,234,567'.
