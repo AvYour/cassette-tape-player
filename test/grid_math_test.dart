@@ -33,6 +33,14 @@ void main() {
     });
   });
 
+  group('GridMath.firstOccurrences', () {
+    test('keeps only the first index of each id (duplicate-safe heroes)', () {
+      expect(GridMath.firstOccurrences(['a', 'b', 'a', 'c', 'b']), {0, 1, 3});
+      expect(GridMath.firstOccurrences(['x']), {0});
+      expect(GridMath.firstOccurrences([]), isEmpty);
+    });
+  });
+
   group('GridMath.rowStaggerWindow', () {
     test('each row enters a beat after the previous', () {
       expect(GridMath.rowStaggerWindow(0), (0.0, 0.45));

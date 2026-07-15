@@ -10,6 +10,7 @@ import '../utils/colors.dart';
 import '../utils/grid_math.dart';
 import '../utils/shuffle_pull.dart';
 import '../widgets/cassette_spine.dart';
+import '../widgets/cassette_tape_view.dart';
 import '../widgets/mini_player_bar.dart';
 import 'player_screen.dart';
 
@@ -417,6 +418,9 @@ class _DrawerScreenState extends State<DrawerScreen>
       );
     }
     final playingId = widget.spotifyService.nowPlaying?.id;
+    // Duplicate tracks may share an id; only the first copy carries the hero
+    // tag so the flight to the player never finds two sources.
+    final heroes = GridMath.firstOccurrences([for (final t in tapes) t.id]);
     return NotificationListener<ScrollNotification>(
       onNotification: _onScroll,
       child: AnimatedBuilder(
@@ -455,6 +459,7 @@ class _DrawerScreenState extends State<DrawerScreen>
                   child: _TapeSlot(
                     tape: tape,
                     isPlaying: tape.id == playingId,
+                    isHero: heroes.contains(i),
                     pulse: _pulse,
                     spineWidth: _spineW,
                     spineHeight: _spineH,
@@ -476,6 +481,7 @@ class _DrawerScreenState extends State<DrawerScreen>
 class _TapeSlot extends StatefulWidget {
   final CassetteTape tape;
   final bool isPlaying;
+  final bool isHero;
   final Animation<double> pulse;
   final double spineWidth;
   final double spineHeight;
@@ -484,6 +490,7 @@ class _TapeSlot extends StatefulWidget {
   const _TapeSlot({
     required this.tape,
     required this.isPlaying,
+    required this.isHero,
     required this.pulse,
     required this.spineWidth,
     required this.spineHeight,
@@ -534,17 +541,29 @@ class _TapeSlotState extends State<_TapeSlot> {
             ),
             Padding(
               padding: const EdgeInsets.all(3),
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: widget.spineWidth,
-                  height: widget.spineHeight,
-                  child: CassetteSpine(
-                    tape: widget.tape,
-                    onTap: widget.onOpen,
+              child: Builder(builder: (context) {
+                final spine = FittedBox(
+                  fit: BoxFit.contain,
+                  child: SizedBox(
+                    width: widget.spineWidth,
+                    height: widget.spineHeight,
+                    child: CassetteSpine(
+                      tape: widget.tape,
+                      onTap: widget.onOpen,
+                    ),
                   ),
-                ),
-              ),
+                );
+                if (!widget.isHero) return spine;
+                // The tape flies out of its slot into the player, rotating
+                // from its filed pose to the deck's flat pose (and back in
+                // when the player closes — even if playback moved on to a
+                // different tape, that one flies to its own slot).
+                return Hero(
+                  tag: 'tape_${widget.tape.id}',
+                  flightShuttleBuilder: cassetteFlightShuttle(widget.tape),
+                  child: spine,
+                );
+              }),
             ),
             // Breathing LED marking the tape that's currently playing.
             if (widget.isPlaying)

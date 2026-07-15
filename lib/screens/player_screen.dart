@@ -522,6 +522,16 @@ class _PlayerScreenState extends State<PlayerScreen>
                         onPressed: _eject,
                       ),
                     ),
+                    const Spacer(),
+                    // Where we are in the box of tapes.
+                    Text(
+                      'TAPE ${_index + 1} OF ${widget.queue.length}',
+                      style: GoogleFonts.robotoMono(
+                        fontSize: 10,
+                        letterSpacing: 2,
+                        color: const Color(0xFFF4EFE6).withValues(alpha: 0.55),
+                      ),
+                    ),
                   ],
                 ),
               ),
