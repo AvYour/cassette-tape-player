@@ -1,42 +1,88 @@
 # Cassette Tape Player
 
-A skeuomorphic cassette tape music player for Android, built with Flutter and connected to the Spotify SDK for full track playback. Holding-a-real-vintage-deck vibes — spinning reels, a rotary volume knob, a mechanical tape counter, and tactile transport buttons with haptics.
+A Spotify-connected music player with two moods: a clean, glassy **daylight**
+side for browsing, and a skeuomorphic **cassette deck** for playing — a
+hand-drawn tape whose reels wind with the song, seven frosted transport keys,
+VU needles, and lyrics that scroll past like a mixtape.
 
 ## Features
 
-- **Hand-drawn cassette UI** — every element (shell, paper label, wound spools, hubs, capstan holes, screws) rendered with `CustomPainter`, no image assets
-- **Live reel animation** — a frame-loop drives both hubs with eased speed ramps, a supply/take-up speed ratio, and subtle motor wobble; 6x wind for FF/REW
-- **Spotify playback** — play, pause, and resume real tracks via the Spotify app through `spotify_sdk`
-- **Recently played → tapes** — your Spotify history maps to a swipeable carousel of upright cassettes
-- **J-card marquee header** — scrolling now-playing spine with side-A badge
-- **Scrolling lyric reel** — center-focused lines that wind and rewind with the tape
-- **Component panel** — slide volume tuner plus five piano-key transport buttons with spring press physics and haptics
-- **Rotating hero transition** — tapes swing from their upright library pose into the player
+**Explore (home)**
+- Your playlists on a slow vertical wheel; the row under the reading line rises
+  onto a frosted-glass lozenge and is the only one that offers **Play**.
+- Three shelves every account has, each with its own glyph: **Liked Songs** (♥),
+  **Your Top Songs** (with a 4-week / 6-month / all-time window), and
+  **Recently Played** (⏱).
+- Pick a playlist, then a song — a plain track list, no drawers.
 
-## Tech Stack
+**Search**
+- Across **songs, artists and albums** in one query.
+- Before you type: your **recent searches** and your **top artists** as a
+  jumping-off point. (Spotify retired its recommendation endpoints, so these
+  stand in for "recommended".)
+- Tap an album for its tracks, or an artist for their albums.
 
-- Flutter (Android target)
-- [`spotify_sdk`](https://pub.dev/packages/spotify_sdk) — remote playback control
-- `http` — Spotify Web API (recently played, album art)
-- `flutter_secure_storage` — OAuth token storage
-- `flutter_dotenv` — credential management
-- `google_fonts` — vintage typography (VT323, Courier Prime, Special Elite)
+**The player**
+- Hand-drawn cassette — the album art becomes the shell — with reels that wind
+  as the track plays; **scrub by dragging the tape** across.
+- Seven glass transport keys with spring-press physics and haptics, a glass
+  volume tuner, and stereo **VU meters** that ride the music.
+- A **♥ Like** toggle that saves the current track to your library.
+- **Synced lyrics** from [lrclib](https://lrclib.net) when available.
+- A **liner-notes sheet** with the track's full Spotify details — album, year,
+  length, popularity, genres, follower count.
+
+**Throughout**
+- Glassmorphism: frosted panels that blur soft colour blooms over a lavender
+  daylight gradient; the player's blooms lean toward the current song's colour.
+- Real cassette sound effects (insert / eject / close) and button clicks.
+
+## Spotify integration
+
+- **Playback** runs through the **App Remote SDK** (`spotify_sdk`) so it drives
+  the installed Spotify app directly.
+- **Data** comes from the **Web API** (`http`): `/me`, `/me/playlists`,
+  `/playlists/{id}/items`, `/me/tracks` (+ `/contains`, save/remove),
+  `/me/top/{tracks,artists}`, `/me/player/recently-played`, `/search`,
+  `/albums/{id}`, `/artists/{id}/albums`, `/tracks/{id}`, `/artists/{id}`,
+  `/me/player/volume`.
+- **Auth** is the SDK's implicit-grant `getAccessToken`. The token is cached
+  with the scope set it was granted, and re-authorizes automatically when the
+  app asks for more scopes rather than silently running on the old grant.
+- **Scopes:** playback read/modify, currently-playing, playlist read
+  (private + collaborative), library read + modify, top-read, recently-played.
+
+## Tech stack
+
+- **Flutter** (Android target)
+- [`spotify_sdk`](https://pub.dev/packages/spotify_sdk) `3.0.0` — remote
+  playback (vendored; see `dependency_overrides`)
+- `http` — Spotify Web API · `flutter_secure_storage` — token storage ·
+  `flutter_dotenv` — credentials · `palette_generator` — album-art colours ·
+  `audioplayers` — sound effects · `google_fonts` — Plus Jakarta Sans for the
+  daylight UI, plus mono/serif faces for the deck's instrument text and lyrics
 - State: `ChangeNotifier` + `ValueNotifier` (no state-management library)
+- Pure logic (wheel geometry, playback maths, tape winding, paging) lives in
+  `utils/` and is covered by unit tests.
 
-## Project Structure
+## Project structure
 
 ```
 lib/
-├── main.dart              # entry, dotenv init, theme
-├── models/                # CassetteTape model, TapeState enum
-├── services/              # Spotify auth + Web API / SDK wrapper
-├── painters/              # cassette body, reels, tape strip, VU meter
-├── widgets/               # cassette card, transport, volume knob, counter, lyrics
-├── screens/               # library carousel + player
-└── utils/                 # color palette
+├── main.dart              # entry, dotenv, HomeScreen (Explore) as home
+├── models/                # cassette_tape, playlist, browse (album/artist/search), track_info
+├── services/              # spotify_auth, spotify_service, lyrics_service (lrclib),
+│                          #   palette_service, sound_service
+├── painters/              # cassette_tape_painter (+ legacy room painters)
+├── widgets/               # glass, track_row, cassette_tape_view, skeuo_button,
+│                          #   eject_button, title_header, lyrics_view, volume_tuner,
+│                          #   vu_meter, liner_notes_sheet, ...
+├── screens/               # home (Explore), playlist, album, artist, search, player
+└── utils/                 # explore_theme, colors, carousel_math, playback_math,
+                           #   tape_wind, ... (pure, unit-tested)
 ```
 
-## Getting Started
+## Getting started
 
 1. **Install dependencies**
    ```bash
@@ -45,7 +91,9 @@ lib/
 
 2. **Configure Spotify credentials**
 
-   Create an app at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), add `cassetteplayer://callback` as a Redirect URI, then copy `.env.example` to `.env` and fill in your Client ID:
+   Create an app at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard),
+   add `cassetteplayer://callback` as a Redirect URI, then copy `.env.example`
+   to `.env` and fill in your Client ID:
    ```
    SPOTIFY_CLIENT_ID=your_client_id_here
    SPOTIFY_REDIRECT_URI=cassetteplayer://callback
@@ -56,9 +104,19 @@ lib/
    flutter run
    ```
 
-   Requires the Spotify app installed on the device and an active Spotify Premium account for playback control.
+   Requires the Spotify app installed on the device, and the account added to
+   your app's allowlist while it is in Development Mode.
 
 ## Notes
 
 - Android `minSdkVersion` is 21 (required by `spotify_sdk`).
-- Volume control has no SDK API in `spotify_sdk` 2.x — the knob is retained as a UI affordance and hook for future support.
+- **Web API, current state (2026):** `/playlists/{id}/tracks` was renamed to
+  `/items`; a playlist's tracks are only returned for playlists you **own or
+  collaborate on**, so other people's playlists are hidden. `search` and
+  `/artists/{id}/albums` cap `limit` at 10. Recommendation, audio-features,
+  related-artists and featured/new-release endpoints are deprecated.
+- **Premium:** the `/me/player/*` endpoints (e.g. volume) require Spotify
+  Premium; free accounts may also be limited to shuffle rather than on-demand
+  track playback on mobile.
+- The earlier "1985 room" home (a cabinet of drawers) still exists in the tree
+  but is no longer reachable — Explore replaced it.
