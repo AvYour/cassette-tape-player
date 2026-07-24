@@ -38,4 +38,35 @@ void main() {
       expect(pl.trackCount, 0);
     });
   });
+
+  group('Playlist.fromJson cover art', () {
+    test('picks a cover around thumbnail size for the explore list', () {
+      final pl = Playlist.fromJson({
+        ...base(),
+        'images': [
+          {'url': 'https://i.scdn.co/huge', 'width': 640, 'height': 640},
+          {'url': 'https://i.scdn.co/mid', 'width': 300, 'height': 300},
+          {'url': 'https://i.scdn.co/tiny', 'width': 60, 'height': 60},
+        ],
+      }, 0);
+      expect(pl.imageUrl, 'https://i.scdn.co/mid');
+    });
+
+    test('a playlist with no images has no cover, not an empty string', () {
+      expect(Playlist.fromJson(base(), 0).imageUrl, isNull);
+      expect(Playlist.fromJson({...base(), 'images': []}, 0).imageUrl, isNull);
+    });
+
+    test('malformed image entries do not crash the parse', () {
+      final pl = Playlist.fromJson({
+        ...base(),
+        'images': [
+          'not-a-map',
+          {'no_url': true},
+          {'url': 'https://i.scdn.co/ok', 'width': 300},
+        ],
+      }, 0);
+      expect(pl.imageUrl, 'https://i.scdn.co/ok');
+    });
+  });
 }

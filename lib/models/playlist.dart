@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../utils/colors.dart';
+import '../utils/image_pick.dart';
 import 'cassette_tape.dart';
 
-/// A Spotify playlist shown as a drawer in the cabinet. Tracks are loaded
-/// lazily the first time the drawer is opened.
+/// A Spotify playlist, one row on the Explore wheel. Tracks are loaded lazily
+/// the first time the playlist is opened.
 class Playlist {
   final String id;
   final String name;
@@ -11,6 +12,11 @@ class Playlist {
   final String ownerId;
   final int trackCount;
   final Color accent;
+
+  /// Playlist cover, sized for the round thumbnail on Explore. Null when
+  /// Spotify has no art for it (or for the offline starter mixtape), in which
+  /// case the UI paints an accent-coloured disc instead.
+  final String? imageUrl;
 
   List<CassetteTape>? tapes; // null until loaded
   bool loading = false;
@@ -28,6 +34,7 @@ class Playlist {
     required this.ownerId,
     required this.trackCount,
     required this.accent,
+    this.imageUrl,
   });
 
   /// The built-in starter mixtape: a drawer that works with no Spotify account
@@ -68,6 +75,10 @@ class Playlist {
       ownerId: owner['id'] as String? ?? '',
       trackCount: _totalOf(json),
       accent: kTapePalette[index % kTapePalette.length].stripe,
+      imageUrl: ImagePick.bestUrl(
+        (json['images'] as List?) ?? const [],
+        targetWidth: 200,
+      ),
     );
   }
 }
