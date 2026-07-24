@@ -59,19 +59,19 @@ class _VintageEjectButtonState extends State<VintageEjectButton>
             padding: EdgeInsets.only(left: 14),
             child: Row(
               children: [
+                // A vector eject mark, not the '⏏' character: the system
+                // renders that codepoint as a colour emoji, so it ignored the
+                // text colour and sat on the panel as an orange badge.
                 Padding(
                   padding: EdgeInsets.only(right: 6, bottom: 2),
-                  child: Text(
-                    '⏏',
-                    style: TextStyle(fontSize: 18, color: kGold),
-                  ),
+                  child: Icon(Icons.eject_rounded, size: 18, color: kInkLight),
                 ),
                 Text(
                   'EJECT',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
-                    color: kCream,
+                    color: kInkLight,
                     letterSpacing: 2,
                   ),
                 ),
@@ -116,8 +116,10 @@ class _EjectPainter extends CustomPainter {
     );
 
     // Body.
-    final base0 = Color.lerp(const Color(0xFF383430), const Color(0xFF2A2724), p)!;
-    final base1 = Color.lerp(const Color(0xFF24211E), const Color(0xFF1A1816), p)!;
+    // Same ivory key-cap as the seven transport keys, so the deck speaks one
+    // material instead of a dark bar over pale buttons.
+    final base0 = Color.lerp(const Color(0xFFF7F1E6), const Color(0xFFE3DCCF), p)!;
+    final base1 = Color.lerp(const Color(0xFFE3DCCF), const Color(0xFFC4BCAB), p)!;
     canvas.drawRRect(
       rrect,
       Paint()..shader = ui.Gradient.linear(Offset.zero, Offset(0, h), [base0, base1]),

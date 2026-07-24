@@ -229,8 +229,9 @@ class _KeyPainter extends CustomPainter {
     final rrect =
         RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(corner));
 
-    // Dark socket base.
-    canvas.drawRRect(rrect, Paint()..color = const Color(0xFF070707));
+    // Socket the key sits in. Pale now — a black well on a white panel read
+    // as seven holes punched through it.
+    canvas.drawRRect(rrect, Paint()..color = kPanelWell);
     canvas.drawRRect(
       rrect,
       Paint()
@@ -239,19 +240,22 @@ class _KeyPainter extends CustomPainter {
         ..shader = ui.Gradient.linear(
           Offset.zero,
           Offset(0, h),
-          const [Colors.black, Color(0x88000000), Color(0x22FFFFFF)],
+          const [Color(0x22000000), Color(0x11000000), Color(0x66FFFFFF)],
           const [0.0, 0.5, 1.0],
         ),
     );
 
+    // The REC key's red is dustier than the original saturated coral: on the
+    // old black panel it was one of seven, on a white one it was the loudest
+    // thing on the screen. Still unmistakably the red key, just aged.
     final base0 = Color.lerp(
-      isRed ? const Color(0xFFE86658) : const Color(0xFFF7F1E6),
-      isRed ? const Color(0xFFC75549) : const Color(0xFFDCD5C6),
+      isRed ? const Color(0xFFDD9086) : const Color(0xFFF7F1E6),
+      isRed ? const Color(0xFFC97C72) : const Color(0xFFDCD5C6),
       p,
     )!;
     final base1 = Color.lerp(
-      isRed ? const Color(0xFFC75549) : const Color(0xFFE3DCCF),
-      isRed ? const Color(0xFF9E3A30) : const Color(0xFFC4BCAB),
+      isRed ? const Color(0xFFC97C72) : const Color(0xFFE3DCCF),
+      isRed ? const Color(0xFFAD6157) : const Color(0xFFC4BCAB),
       p,
     )!;
 
@@ -264,7 +268,9 @@ class _KeyPainter extends CustomPainter {
     // Drop shadow that tightens as the key is pressed.
     final shadowRadius = (1 - p) * 12 + p * 1.5;
     final shadowY = (1 - p) * 8 + p * 0.5;
-    final shadowAlpha = ((1 - p) * 130 + p * 240).round();
+    // Softer than the original: on a pale socket a near-opaque black shadow
+    // ringed every key. The press still visibly tightens it.
+    final shadowAlpha = ((1 - p) * 55 + p * 120).round();
     canvas.drawRRect(
       rrect.shift(Offset(0, shadowY)),
       Paint()
@@ -282,13 +288,13 @@ class _KeyPainter extends CustomPainter {
     final dimpleR = w * 0.35;
     final center = Offset(w / 2, h / 2);
     final dimpleDark = Color.lerp(
-      isRed ? const Color(0xFF9E382E) : const Color(0xFFCAC2AE),
-      isRed ? const Color(0xFF7A2720) : const Color(0xFFA8A08E),
+      isRed ? const Color(0xFFB86C62) : const Color(0xFFCAC2AE),
+      isRed ? const Color(0xFF9E574E) : const Color(0xFFA8A08E),
       p,
     )!;
     final dimpleLight = Color.lerp(
-      isRed ? const Color(0xFFF0796C) : Colors.white,
-      isRed ? const Color(0xFFD95D50) : const Color(0xFFDED6C4),
+      isRed ? const Color(0xFFEDB0A7) : Colors.white,
+      isRed ? const Color(0xFFD89489) : const Color(0xFFDED6C4),
       p,
     )!;
     canvas.drawCircle(
@@ -314,8 +320,8 @@ class _KeyPainter extends CustomPainter {
     if (p < 0.99) {
       final la = (1 - p * 2).clamp(0.0, 1.0);
       final lightBevel =
-          (isRed ? const Color(0xFFF2897E) : Colors.white).withValues(alpha: la);
-      final darkBevel = (isRed ? const Color(0xFFA63B30) : const Color(0xFFB5AFA1))
+          (isRed ? const Color(0xFFEDB8B0) : Colors.white).withValues(alpha: la);
+      final darkBevel = (isRed ? const Color(0xFFBB7268) : const Color(0xFFB5AFA1))
           .withValues(alpha: la);
       canvas.drawRRect(
         rrect,

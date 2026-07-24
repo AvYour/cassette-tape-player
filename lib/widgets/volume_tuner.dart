@@ -91,7 +91,7 @@ class _TunerPainter extends CustomPainter {
           style: GoogleFonts.robotoMono(
             fontSize: fontSize,
             fontWeight: weight,
-            color: kMark,
+            color: kInkMuted,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -112,7 +112,7 @@ class _TunerPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(Rect.fromLTWH(trackX, trackY, trackW, trackH),
           const Radius.circular(trackH / 2)),
-      Paint()..color = const Color(0xFF050505),
+      Paint()..color = kPanelWell,
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(Rect.fromLTWH(trackX, trackY + trackH, trackW, 1),
@@ -123,7 +123,7 @@ class _TunerPainter extends CustomPainter {
     // Scale marks and numerals.
     final marksY = h * 0.65;
     final markPaint = Paint()
-      ..color = kMark.withValues(alpha: 0.6)
+      ..color = kInkMuted.withValues(alpha: 0.7)
       ..strokeWidth = 1;
     for (int i = 0; i <= 10; i++) {
       final x = trackX + i * (trackW / 10);

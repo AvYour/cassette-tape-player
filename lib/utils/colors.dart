@@ -22,6 +22,19 @@ const Color kMark = Color(0xFF7A7366);
 const Color kGold = Color(0xFFD6A033);
 const Color kCream = Color(0xFFDCD5C6);
 
+// --- Daylight reskin -------------------------------------------------------
+// The deck keeps all its machinery — reels, VU needles, seven keys — but it
+// now sits in the same lavender room as Explore instead of a dark one. These
+// are the surfaces that used to be black: the panel, the key sockets, the
+// backing plate behind the cassette, and the lyric reel's ink.
+const Color kPanelLight = Color(0xFFFFFFFF);
+const Color kPanelSeam = Color(0xFFEAE7F3);
+const Color kPanelWell = Color(0xFFE7E4F2);
+const Color kInkLight = Color(0xFF14121C);
+const Color kInkMuted = Color(0xFF9A96AA);
+const Color kActiveLyricLight = Color(0xFF14121C);
+const Color kFadedLyricLight = Color(0xFFB8B4C6);
+
 /// Darkens by scaling RGB toward black (reference `Color.darken`).
 Color darken(Color c, [double fraction = 0.2]) =>
     Color.lerp(c, const Color(0xFF000000), fraction)!;

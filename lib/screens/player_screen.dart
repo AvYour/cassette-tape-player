@@ -10,6 +10,7 @@ import '../services/lyrics_service.dart';
 import '../services/sound_service.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
+import '../utils/explore_theme.dart';
 import '../utils/playback_math.dart';
 import '../utils/scrub_math.dart';
 import '../utils/tape_wind.dart';
@@ -20,7 +21,6 @@ import '../widgets/liner_notes_sheet.dart';
 import '../widgets/lyrics_view.dart';
 import '../widgets/skeuo_button.dart';
 import '../widgets/title_header.dart';
-import '../widgets/dynamic_background.dart';
 import '../widgets/volume_tuner.dart';
 import '../widgets/vu_meter.dart';
 
@@ -504,9 +504,11 @@ class _PlayerScreenState extends State<PlayerScreen>
         curve: const Interval(0.4, 1, curve: Curves.easeOutCubic));
 
     return Scaffold(
-      body: DynamicMusicBackground(
-        tape: _tape,
-        progress: _lyricProgress,
+      backgroundColor: Explore.bgTop,
+      // The same lavender room as Explore. (This replaced the flowing
+      // album-colour wash: one theme end to end, and black type always reads.)
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: Explore.backdrop),
         child: SafeArea(
           child: Column(
             children: [
@@ -529,7 +531,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                       style: GoogleFonts.robotoMono(
                         fontSize: 10,
                         letterSpacing: 2,
-                        color: const Color(0xFFF4EFE6).withValues(alpha: 0.55),
+                        color: kInkMuted,
                       ),
                     ),
                   ],
@@ -589,14 +591,24 @@ class _PlayerScreenState extends State<PlayerScreen>
                 ),
               ),
               const SizedBox(height: 24),
+              // The reel is centre-focused, so left to fill all the leftover
+              // height it parked the active line in the middle of a tall empty
+              // box. Capped and top-aligned, it reads just under the cassette
+              // and the slack collects at the bottom instead.
               Expanded(
-                child: FadeTransition(
-                  opacity: panelAnim,
-                  child: FractionallySizedBox(
-                    widthFactor: 0.88,
-                    child: VintageLyrics(
-                      lyrics: _lyrics,
-                      progress: _lyricProgress,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: FadeTransition(
+                    opacity: panelAnim,
+                    child: FractionallySizedBox(
+                      widthFactor: 0.88,
+                      child: SizedBox(
+                        height: 190,
+                        child: VintageLyrics(
+                          lyrics: _lyrics,
+                          progress: _lyricProgress,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -624,29 +636,19 @@ class _PlayerScreenState extends State<PlayerScreen>
   Widget _buildControlPanel() {
     return Container(
       decoration: BoxDecoration(
-        color: kControlPanelBg,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: kPanelLight,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: Explore.lift,
       ),
       child: Stack(
         children: [
-          // Machined seam near the top edge.
+          // Machined seam near the top edge — one hairline now that the panel
+          // is white; the old black-over-white bevel read as a scratch.
           Positioned(
-            top: 8,
-            left: 6,
-            right: 6,
-            child: Column(
-              children: [
-                Container(height: 2, color: const Color(0x33000000)),
-                Container(height: 1, color: const Color(0x1AFFFFFF)),
-              ],
-            ),
+            top: 10,
+            left: 14,
+            right: 14,
+            child: Container(height: 1, color: kPanelSeam),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
@@ -706,7 +708,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                             style: GoogleFonts.robotoMono(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: kMark.withValues(alpha: 0.8),
+                              color: kInkMuted,
                               letterSpacing: 2,
                             ),
                           ),
@@ -716,8 +718,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                           style: GoogleFonts.robotoMono(
                             fontSize: 9.5,
                             letterSpacing: 0.5,
-                            color:
-                                const Color(0xFF8FD99A).withValues(alpha: 0.9),
+                            // Was an LCD green that vanished on white.
+                            color: kInkLight,
                           ),
                         ),
                       ],
@@ -792,7 +794,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 }
 
-/// A four-digit mechanical tape counter: each digit sits in its own dark
+/// A four-digit mechanical tape counter: each digit sits in its own recessed
 /// cell, like the odometer wheels on a real deck.
 class _CounterCells extends StatelessWidget {
   final String digits;
@@ -811,20 +813,16 @@ class _CounterCells extends StatelessWidget {
             margin: const EdgeInsets.only(right: 1.5),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(2),
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF090909), Color(0xFF1C1C1C)],
-              ),
-              border: Border.all(color: const Color(0x33000000)),
+              borderRadius: BorderRadius.circular(3),
+              color: kPanelWell,
+              border: Border.all(color: kPanelSeam),
             ),
             child: Text(
               d,
               style: GoogleFonts.robotoMono(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFFE8E2D4),
+                color: kInkLight,
                 height: 1,
               ),
             ),
@@ -834,7 +832,8 @@ class _CounterCells extends StatelessWidget {
   }
 }
 
-/// Cassette with its dark backing plate and deep shadow (player pose).
+/// Cassette on its backing plate, lifted off the page by a soft shadow
+/// (player pose).
 class _PlayerCassette extends StatelessWidget {
   final CassetteTape tape;
   final ReelAngles angles;
@@ -852,9 +851,9 @@ class _PlayerCassette extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.45),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
+              color: const Color(0xFF3B2E63).withValues(alpha: 0.16),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
             ),
           ],
         ),
@@ -877,14 +876,16 @@ class _BackingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rrect = RRect.fromRectAndRadius(
         Offset.zero & size, Radius.circular(size.height * 0.06));
-    canvas.drawRRect(rrect, Paint()..color = const Color(0xFF0A0A0A));
+    // A pale tray rather than the old black slab, so the cassette reads as
+    // seated in the deck without punching a dark hole in the lavender.
+    canvas.drawRRect(rrect, Paint()..color = kPanelWell);
     canvas.drawRRect(
       rrect,
       Paint()
         ..shader = ui.Gradient.linear(
           Offset.zero,
           Offset(0, size.height * 0.4),
-          const [Color(0xDD000000), Colors.transparent],
+          const [Color(0x22000000), Colors.transparent],
         ),
     );
   }

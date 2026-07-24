@@ -161,7 +161,8 @@ class _HeaderPainter extends CustomPainter {
     final h = size.height;
 
     // Cream card with side shading.
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFF4EFE6));
+    // White J-card, matching the panel below and the lozenges on Explore.
+    canvas.drawRect(Offset.zero & size, Paint()..color = kPanelLight);
     canvas.drawRect(
       Offset.zero & size,
       Paint()

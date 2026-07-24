@@ -59,8 +59,8 @@ class _LyricsPainter extends CustomPainter {
       final scale = lerpDouble(_maxScale, 0.85, (distance / 2).clamp(0.0, 1.0))!;
       final alpha = lerpDouble(1.0, 0.1, (distance / 3).clamp(0.0, 1.0))!;
       if (alpha <= 0.05) continue;
-      final color =
-          Color.lerp(kActiveLyric, kVintageInk, (distance * 1.5).clamp(0.0, 1.0))!;
+      final color = Color.lerp(kActiveLyricLight, kFadedLyricLight,
+          (distance * 1.5).clamp(0.0, 1.0))!;
 
       final tp = TextPainter(
         text: TextSpan(
@@ -68,16 +68,10 @@ class _LyricsPainter extends CustomPainter {
           style: GoogleFonts.notoSerif(
             fontSize: 20,
             fontWeight: FontWeight.bold,
+            // Plain ink, no glyph shadow: the reel now runs over flat lavender
+            // rather than a flowing album wash, so the legibility trick that
+            // shadow existed for would only muddy it.
             color: color.withValues(alpha: alpha),
-            // Soft dark shadow on the glyphs themselves keeps the line legible
-            // over the flowing background — no white box behind it.
-            shadows: [
-              Shadow(
-                color: Colors.black.withValues(alpha: alpha * 0.5),
-                blurRadius: 6,
-                offset: const Offset(0, 1),
-              ),
-            ],
           ),
         ),
         textDirection: TextDirection.ltr,
