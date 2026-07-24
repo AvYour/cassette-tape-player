@@ -16,8 +16,22 @@ enum PlaylistKind {
   /// Listening history — `/me/player/recently-played`.
   recent,
 
+  /// Your most-played tracks — `/me/top/tracks`.
+  top,
+
   /// The built-in starter mixtape; preloaded, never fetched.
   demo,
+}
+
+/// The window `/me/top/tracks` is computed over.
+enum TopRange {
+  shortTerm('short_term', 'Last 4 weeks'),
+  mediumTerm('medium_term', 'Last 6 months'),
+  longTerm('long_term', 'All time');
+
+  const TopRange(this.api, this.label);
+  final String api;
+  final String label;
 }
 
 /// A row on the Explore wheel. Tracks are loaded lazily the first time it is
@@ -81,6 +95,18 @@ class Playlist {
         trackCount: 0,
         accent: kTapePalette[4].stripe,
         kind: PlaylistKind.recent,
+      );
+
+  /// Your most-played tracks over [range]. The range rides on the id so a
+  /// reopen after switching windows re-fetches instead of showing the cache.
+  factory Playlist.topTracks(TopRange range) => Playlist(
+        id: 'top_${range.api}',
+        name: 'Your Top Songs',
+        owner: range.label,
+        ownerId: '',
+        trackCount: 0,
+        accent: kTapePalette[1].stripe,
+        kind: PlaylistKind.top,
       );
 
   /// The built-in starter mixtape: a drawer that works with no Spotify account

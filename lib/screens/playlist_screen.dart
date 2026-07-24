@@ -26,7 +26,10 @@ class PlaylistScreen extends StatefulWidget {
 }
 
 class _PlaylistScreenState extends State<PlaylistScreen> {
-  Playlist get playlist => widget.playlist;
+  // Mutable so "Your Top Songs" can swap its window in place: a new range is a
+  // new Playlist (new id → new cache) that we then load.
+  late Playlist _playlist = widget.playlist;
+  Playlist get playlist => _playlist;
   SpotifyService get svc => widget.spotifyService;
 
   @override
@@ -37,6 +40,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       svc.loadPlaylistTracks(playlist);
     });
+  }
+
+  void _setRange(TopRange range) {
+    if ('top_${range.api}' == _playlist.id) return;
+    svc.topRange = range; // also swaps the Explore row
+    setState(() => _playlist = Playlist.topTracks(range));
+    svc.loadPlaylistTracks(_playlist);
   }
 
   void _play(List<CassetteTape> tapes, int index) {
@@ -69,12 +79,32 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 children: [
                   _topBar(),
                   _headerCard(tapes),
+                  if (playlist.kind == PlaylistKind.top) _rangeChips(),
                   Expanded(child: _body(tapes)),
                 ],
               );
             },
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _rangeChips() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+      child: Row(
+        children: [
+          for (final r in TopRange.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _RangeChip(
+                label: r.label,
+                selected: 'top_${r.api}' == playlist.id,
+                onTap: () => _setRange(r),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -184,6 +214,45 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 cacheWidth: (size * 3).round(),
                 errorBuilder: (_, __, ___) => Container(color: playlist.accent),
               ),
+      ),
+    );
+  }
+}
+
+/// A pill for choosing the Top Songs window: filled glass when picked, a plain
+/// hairline outline otherwise.
+class _RangeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RangeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? Explore.card : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? Colors.transparent : Explore.hairline,
+          ),
+          boxShadow: selected ? Explore.lift : null,
+        ),
+        child: Text(
+          label,
+          style: Explore.caption.copyWith(
+            color: selected ? Explore.ink : Explore.muted,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
       ),
     );
   }

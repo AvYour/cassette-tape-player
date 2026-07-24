@@ -30,6 +30,18 @@ void main() {
       expect(recent.contextUri, isNull);
     });
 
+    test('Top Songs is its own kind, and its range rides on the id', () {
+      final top = Playlist.topTracks(TopRange.shortTerm);
+      expect(top.kind, PlaylistKind.top);
+      expect(top.name, 'Your Top Songs');
+      expect(top.owner, 'Last 4 weeks');
+      expect(top.id, 'top_short_term');
+      expect(top.contextUri, isNull);
+
+      // A different window is a different row, so the cache never crosses over.
+      expect(Playlist.topTracks(TopRange.longTerm).id, 'top_long_term');
+    });
+
     test('the demo mixtape no longer claims a bogus playlist context', () {
       final demo = Playlist.demo();
       expect(demo.kind, PlaylistKind.demo);

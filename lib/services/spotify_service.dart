@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:spotify_sdk/spotify_sdk.dart';
 import 'package:spotify_sdk/models/player_state.dart';
+import '../models/browse.dart';
 import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
 import '../models/track_info.dart';
@@ -216,15 +217,28 @@ class SpotifyService extends ChangeNotifier {
       // Keep only playlists the user created (owns), when we know the id.
       final owned =
           userId == null ? all : all.where((p) => p.ownerId == userId).toList();
-      // Your library and your history lead: they are two shelves every account
-      // has, neither is a playlist, and so /me/playlists never mentions them.
+      // Your library, top songs and history lead: three shelves every account
+      // has, none of them a playlist, so /me/playlists never mentions them.
       _playlists = [
         Playlist.liked(total: await _fetchLikedTotal()),
+        Playlist.topTracks(_topRange),
         Playlist.recentlyPlayed(),
         ...owned,
       ];
       notifyListeners();
     } catch (_) {}
+  }
+
+  // Which window "Your Top Songs" is showing. Changing it swaps the row for a
+  // fresh one (new id → new cache) and rebuilds Explore.
+  TopRange _topRange = TopRange.mediumTerm;
+  TopRange get topRange => _topRange;
+  set topRange(TopRange range) {
+    if (range == _topRange) return;
+    _topRange = range;
+    final i = _playlists.indexWhere((p) => p.kind == PlaylistKind.top);
+    if (i != -1) _playlists[i] = Playlist.topTracks(range);
+    notifyListeners();
   }
 
   /// How many songs are saved, read off a one-item page's `total`. Only feeds
@@ -261,6 +275,8 @@ class SpotifyService extends ChangeNotifier {
           await _loadSavedTracks(playlist);
         case PlaylistKind.recent:
           await _loadRecentlyPlayed(playlist);
+        case PlaylistKind.top:
+          await _loadTopTracks(playlist);
         case PlaylistKind.demo:
           break; // preloaded
         case PlaylistKind.spotify:
@@ -359,6 +375,36 @@ class SpotifyService extends ChangeNotifier {
     }
   }
 
+  /// Your most-played tracks — `GET /me/top/tracks` (scope `user-top-read`).
+  /// The window is encoded in the playlist id (`top_short_term` etc.). These
+  /// are full track objects, so the search parser handles them.
+  Future<void> _loadTopTracks(Playlist playlist) async {
+    final range = playlist.id.startsWith('top_')
+        ? playlist.id.substring(4)
+        : 'medium_term';
+    final res = await _authedGet(Uri.parse(
+        'https://api.spotify.com/v1/me/top/tracks'
+        '?limit=50&time_range=$range'));
+    if (res.statusCode != 200) {
+      playlist.tapes = [];
+      playlist.loadError = _apiError(res.statusCode, res.body);
+      return;
+    }
+    final items = (json.decode(res.body)['items'] as List?) ?? [];
+    final tapes = <CassetteTape>[];
+    for (final item in items) {
+      if (item is Map<String, dynamic> && item['id'] != null) {
+        try {
+          tapes.add(CassetteTape.fromSpotifyTrack(item, tapes.length));
+        } catch (_) {}
+      }
+    }
+    playlist.tapes = tapes;
+    if (tapes.isEmpty) {
+      playlist.loadError = 'Not enough listening yet to rank your top songs.';
+    }
+  }
+
   /// Searches Spotify's catalogue for tracks matching [query].
   Future<List<CassetteTape>> searchTracks(String query) async {
     _searchError = null;
@@ -385,6 +431,155 @@ class SpotifyService extends ChangeNotifier {
     } catch (e) {
       _searchError = 'Error: $e';
       return [];
+    }
+  }
+
+  // Recent search terms, newest first, in memory for the session. Kept small
+  // so the empty search screen stays a shortcut, not a log.
+  final List<String> _recentSearches = [];
+  List<String> get recentSearches => List.unmodifiable(_recentSearches);
+
+  void rememberSearch(String query) {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    _recentSearches.removeWhere((s) => s.toLowerCase() == q.toLowerCase());
+    _recentSearches.insert(0, q);
+    if (_recentSearches.length > 8) _recentSearches.removeLast();
+  }
+
+  void clearRecentSearches() {
+    _recentSearches.clear();
+    notifyListeners();
+  }
+
+  // Your top artists, cached for the session — feeds the empty search screen
+  // as tappable suggestions. `user-top-read`.
+  List<ArtistBrief>? _topArtists;
+
+  Future<List<ArtistBrief>> topArtists() async {
+    if (_topArtists != null) return _topArtists!;
+    try {
+      final res = await _authedGet(Uri.parse(
+          'https://api.spotify.com/v1/me/top/artists?limit=12&time_range=medium_term'));
+      if (res.statusCode != 200) return const [];
+      final items = (json.decode(res.body)['items'] as List?) ?? [];
+      _topArtists = [
+        for (final a in items)
+          if (a is Map<String, dynamic> && a['id'] != null)
+            ArtistBrief.fromJson(a),
+      ];
+      return _topArtists!;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Searches tracks, artists and albums in one call.
+  Future<SearchResults> searchAll(String query) async {
+    _searchError = null;
+    final token = SpotifyAuth.accessToken;
+    if (token == null || query.trim().isEmpty) return const SearchResults();
+    try {
+      final res = await _authedGet(Uri.parse(
+          'https://api.spotify.com/v1/search?type=track,artist,album'
+          '&limit=8&q=${Uri.encodeQueryComponent(query)}'));
+      if (res.statusCode != 200) {
+        _searchError = _apiError(res.statusCode, res.body);
+        return const SearchResults();
+      }
+      return SearchResults.fromJson(json.decode(res.body) as Map<String, dynamic>);
+    } catch (e) {
+      _searchError = 'Error: $e';
+      return const SearchResults();
+    }
+  }
+
+  /// The tracks of an album — `GET /albums/{id}` — as cassettes, each borrowing
+  /// the album's cover (the album's own track list ships none).
+  Future<List<CassetteTape>> loadAlbumTracks(String albumId) async {
+    try {
+      final res = await _authedGet(
+          Uri.parse('https://api.spotify.com/v1/albums/$albumId'));
+      if (res.statusCode != 200) return [];
+      return BrowseParsing.albumTapes(
+          json.decode(res.body) as Map<String, dynamic>);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// An artist's albums — `GET /artists/{id}/albums` — newest first, de-duped
+  /// by name (Spotify lists the same album once per market).
+  ///
+  /// This endpoint caps `limit` at 10 (a 50 is a 400, which was returning an
+  /// empty list), so page a few times to build a fuller list. `market` is
+  /// omitted — the token's own country applies automatically.
+  Future<List<AlbumBrief>> loadArtistAlbums(String artistId) async {
+    final seen = <String>{};
+    final albums = <AlbumBrief>[];
+    try {
+      for (var offset = 0; offset < 40; offset += 10) {
+        final res = await _authedGet(Uri.parse(
+            'https://api.spotify.com/v1/artists/$artistId/albums'
+            '?include_groups=album,single&limit=10&offset=$offset'));
+        if (res.statusCode != 200) break;
+        final items = (json.decode(res.body)['items'] as List?) ?? [];
+        for (final item in items) {
+          if (item is Map<String, dynamic> && item['id'] != null) {
+            final a = AlbumBrief.fromJson(item);
+            if (seen.add(a.name.toLowerCase())) albums.add(a);
+          }
+        }
+        if (items.length < 10) break;
+      }
+    } catch (_) {}
+    return albums;
+  }
+
+  // --- Liked / saved tracks ------------------------------------------------
+  //
+  // These use the classic `/me/tracks` family. Spotify has deprecated it in
+  // favour of a unified "Saved Items" library endpoint, but the old one still
+  // works (it is what Liked Songs reads today); swap the paths here once the
+  // replacement's shape is pinned. Requires scope `user-library-modify`.
+
+  /// Which of [ids] are saved, as a map id→saved. Chunked to the 50-id cap.
+  Future<Map<String, bool>> savedStatus(List<String> ids) async {
+    final result = <String, bool>{};
+    for (var i = 0; i < ids.length; i += 50) {
+      final chunk = ids.sublist(i, i + 50 > ids.length ? ids.length : i + 50);
+      try {
+        final res = await _authedGet(Uri.parse(
+            'https://api.spotify.com/v1/me/tracks/contains?ids=${chunk.join(',')}'));
+        if (res.statusCode != 200) continue;
+        final flags = (json.decode(res.body) as List?) ?? [];
+        for (var j = 0; j < chunk.length && j < flags.length; j++) {
+          result[chunk[j]] = flags[j] == true;
+        }
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  /// Saves or unsaves one track. Returns the new saved state (unchanged on
+  /// failure so the UI can revert an optimistic toggle).
+  Future<bool> setSaved(String trackId, bool save) async {
+    final uri =
+        Uri.parse('https://api.spotify.com/v1/me/tracks?ids=$trackId');
+    try {
+      final res = save
+          ? await http.put(uri, headers: _authHeader)
+          : await http.delete(uri, headers: _authHeader);
+      var code = res.statusCode;
+      if (code == 401 && await SpotifyAuth.authorizeInteractive()) {
+        final retry = save
+            ? await http.put(uri, headers: _authHeader)
+            : await http.delete(uri, headers: _authHeader);
+        code = retry.statusCode;
+      }
+      return (code == 200 || code == 201 || code == 204) ? save : !save;
+    } catch (_) {
+      return !save;
     }
   }
 

@@ -118,6 +118,36 @@ class _PlayerScreenState extends State<PlayerScreen>
   List<int>? _lyricTimesMs; // set when synced lyrics are available
   int _lyricLineHint = 0; // last active line, to scan forward from each frame
 
+  // Whether the current tape is in the user's Liked Songs. Null until
+  // /me/tracks/contains answers (or while offline, where the heart is hidden).
+  bool? _saved;
+
+  bool get _canLike =>
+      widget.spotifyService.isConnected && widget.spotifyService.hasWebApi;
+
+  /// Ask Spotify whether this tape is saved, keyed to the tape so a fast
+  /// next/prev can't land the answer on the wrong song.
+  Future<void> _fetchSaved() async {
+    if (!_canLike) return;
+    final id = _tape.id;
+    setState(() => _saved = null);
+    final map = await widget.spotifyService.savedStatus([id]);
+    if (!mounted || _tape.id != id) return;
+    setState(() => _saved = map[id] ?? false);
+  }
+
+  /// Heart / un-heart the current tape, optimistically; setSaved reverts the
+  /// flag if Spotify rejects it.
+  Future<void> _toggleSaved() async {
+    final id = _tape.id;
+    final next = !(_saved ?? false);
+    HapticFeedback.lightImpact();
+    setState(() => _saved = next);
+    final result = await widget.spotifyService.setSaved(id, next);
+    if (!mounted || _tape.id != id) return;
+    setState(() => _saved = result);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -125,6 +155,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     widget.spotifyService.addListener(_followSpotify);
     _ticker = createTicker(_tick)..start();
     _fetchLyrics();
+    _fetchSaved();
 
     // Reopened (e.g. from the mini-player) while this tape is already playing:
     // resume the visuals in sync instead of starting from stopped.
@@ -202,6 +233,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     widget.spotifyService
         .setNowPlaying(widget.queue, _index, contextUri: widget.contextUri);
     _fetchLyrics();
+    _fetchSaved();
   }
 
   /// When the track ends, roll on to the next tape and keep playing — like
@@ -287,6 +319,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     widget.spotifyService
         .setNowPlaying(widget.queue, _index, contextUri: widget.contextUri);
     _fetchLyrics();
+    _fetchSaved();
   }
 
   void _setTapeState(TapeState state) {
@@ -526,6 +559,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                       ),
                     ),
                     const Spacer(),
+                    if (_canLike) ...[
+                      _HeartButton(saved: _saved, onTap: _toggleSaved),
+                      const SizedBox(width: 14),
+                    ],
                     // Where we are in the box of tapes.
                     Text(
                       'TAPE ${_index + 1} OF ${widget.queue.length}',
@@ -788,6 +825,38 @@ class _PlayerScreenState extends State<PlayerScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Heart toggle for Liked Songs. A hollow outline when unsaved, a filled rose
+/// heart when saved; a faint outline while the saved state is still unknown.
+class _HeartButton extends StatelessWidget {
+  final bool? saved;
+  final VoidCallback onTap;
+
+  const _HeartButton({required this.saved, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isSaved = saved ?? false;
+    return GestureDetector(
+      onTap: saved == null ? null : onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedScale(
+        scale: isSaved ? 1.0 : 0.94,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutBack,
+        child: Icon(
+          isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          size: 24,
+          color: saved == null
+              ? kInkMuted.withValues(alpha: 0.4)
+              : isSaved
+                  ? const Color(0xFFE0526B)
+                  : kInkMuted,
+        ),
       ),
     );
   }

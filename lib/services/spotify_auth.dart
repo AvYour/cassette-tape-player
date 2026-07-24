@@ -15,22 +15,29 @@ class SpotifyAuth {
       'user-read-playback-state user-modify-playback-state '
       'user-read-currently-playing playlist-read-private '
       'playlist-read-collaborative user-library-read '
+      'user-library-modify user-top-read '
       'user-read-recently-played';
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
   static const String _kToken = 'sp_token';
   static const String _kExpiry = 'sp_token_expiry';
+  static const String _kScope = 'sp_token_scope';
 
   static String? accessToken;
   static bool get hasWebApi => accessToken != null;
 
-  /// Reuses a still-valid stored token without any UI. Returns false if none.
+  /// Reuses a still-valid stored token without any UI. Returns false if none —
+  /// including when the app now asks for more scopes than the cached token was
+  /// granted, which forces a fresh interactive authorization so new features
+  /// (top tracks, saving songs) aren't silently denied until the token expires.
   static Future<bool> ensureTokenSilent() async {
     try {
       final token = await _storage.read(key: _kToken);
       final expiry = int.tryParse(await _storage.read(key: _kExpiry) ?? '');
+      final scope = await _storage.read(key: _kScope);
       if (token != null &&
           expiry != null &&
+          scope == _scope &&
           DateTime.now().millisecondsSinceEpoch < expiry) {
         accessToken = token;
         return true;
@@ -54,6 +61,7 @@ class SpotifyAuth {
           .millisecondsSinceEpoch;
       await _storage.write(key: _kToken, value: accessToken);
       await _storage.write(key: _kExpiry, value: expiry.toString());
+      await _storage.write(key: _kScope, value: _scope);
       return accessToken != null;
     } catch (_) {
       accessToken = null;
@@ -80,6 +88,7 @@ class SpotifyAuth {
     try {
       await _storage.delete(key: _kToken);
       await _storage.delete(key: _kExpiry);
+      await _storage.delete(key: _kScope);
     } catch (_) {}
   }
 }
