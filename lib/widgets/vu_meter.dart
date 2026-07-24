@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// One small VU meter: cream face, tick arc with a red zone, glass glare and
-/// a needle pivoting from the bottom edge. Shared by the room's desk deck and
-/// the player's component panel; drive [deflection] with `VuMotion`.
+/// One small VU meter: a pale glass face, tick arc with a red zone, a glare
+/// and a needle pivoting from the bottom edge. Drive [deflection] with
+/// `VuMotion`.
 class VuMeter extends StatelessWidget {
   final double deflection;
   final double width;
@@ -39,7 +39,7 @@ class _VuPainter extends CustomPainter {
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFF2E9D4), Color(0xFFD8C7A0)],
+          colors: [Color(0xFFFFFFFF), Color(0xFFE7E4F2)],
         ).createShader(Offset.zero & size),
     );
     canvas.drawRRect(
@@ -47,7 +47,7 @@ class _VuPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = Colors.black.withValues(alpha: 0.55),
+        ..color = const Color(0xFF9A96AA).withValues(alpha: 0.5),
     );
 
     final pivot = Offset(size.width / 2, size.height - 2);
@@ -66,8 +66,8 @@ class _VuPainter extends CustomPainter {
         Paint()
           ..strokeWidth = 1
           ..color = f > 0.66
-              ? const Color(0xFFB33A2C)
-              : Colors.black.withValues(alpha: 0.6),
+              ? const Color(0xFFE0526B)
+              : const Color(0xFF9A96AA),
       );
     }
 
@@ -78,9 +78,9 @@ class _VuPainter extends CustomPainter {
       pivot + Offset.fromDirection(angle, size.height - 5),
       Paint()
         ..strokeWidth = 1.3
-        ..color = const Color(0xFF7E241B),
+        ..color = const Color(0xFFE0526B),
     );
-    canvas.drawCircle(pivot, 1.8, Paint()..color = const Color(0xFF3A3733));
+    canvas.drawCircle(pivot, 1.8, Paint()..color = const Color(0xFF14121C));
 
     // Glass glare.
     canvas.drawRRect(

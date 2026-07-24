@@ -396,21 +396,41 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // The three system shelves get a meaningful glyph instead of a letter, so
+  // they read as different in kind from the playlists around them.
+  static const Map<PlaylistKind, IconData> _kindIcon = {
+    PlaylistKind.liked: Icons.favorite_rounded,
+    PlaylistKind.top: Icons.trending_up_rounded,
+    PlaylistKind.recent: Icons.history_rounded,
+  };
+
   Widget _coverFallback(Playlist playlist, double size) {
-    final letter = playlist.name.trim().isEmpty
-        ? '♪'
-        : playlist.name.trim().characters.first.toUpperCase();
-    return Container(
-      color: playlist.accent,
-      alignment: Alignment.center,
-      child: Text(
-        letter,
-        style: Explore.rowTitle.copyWith(
-          color: Colors.white,
-          fontSize: size * 0.4,
+    final icon = _kindIcon[playlist.kind];
+    // A soft two-tone disc under the mark, richer than a flat swatch.
+    final disc = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            playlist.accent,
+            Color.lerp(playlist.accent, Colors.black, 0.18)!,
+          ],
         ),
       ),
+      child: Center(
+        child: icon != null
+            ? Icon(icon, color: Colors.white, size: size * 0.42)
+            : Text(
+                playlist.name.trim().isEmpty
+                    ? '♪'
+                    : playlist.name.trim().characters.first.toUpperCase(),
+                style: Explore.rowTitle
+                    .copyWith(color: Colors.white, fontSize: size * 0.4),
+              ),
+      ),
     );
+    return SizedBox(width: size, height: size, child: disc);
   }
 
   Widget _navBar() {
