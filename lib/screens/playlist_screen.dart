@@ -4,6 +4,8 @@ import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
 import '../services/spotify_service.dart';
 import '../utils/explore_theme.dart';
+import '../widgets/glass.dart';
+import '../widgets/track_row.dart';
 import 'player_screen.dart';
 
 /// A playlist's songs, plainly listed. This is the step between Explore and
@@ -56,8 +58,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Explore.bgTop,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: Explore.backdrop),
+      body: GlassBackdrop(
+        tint: playlist.accent,
         child: SafeArea(
           child: ListenableBuilder(
             listenable: svc,
@@ -150,70 +152,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       itemCount: tapes.length,
-      itemBuilder: (context, i) => _trackRow(tapes, i),
-    );
-  }
-
-  Widget _trackRow(List<CassetteTape> tapes, int index) {
-    final tape = tapes[index];
-    final nowPlaying = svc.nowPlaying?.id == tape.id;
-    final art = tape.thumbUrl;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: nowPlaying ? Explore.card : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _play(tapes, index),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: SizedBox(
-                    width: 50,
-                    height: 50,
-                    child: art == null || art.isEmpty
-                        ? Container(color: tape.stripeColor)
-                        : Image.network(
-                            art,
-                            fit: BoxFit.cover,
-                            cacheWidth: 150,
-                            errorBuilder: (_, __, ___) =>
-                                Container(color: tape.stripeColor),
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tape.trackName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Explore.rowTitle.copyWith(fontSize: 15.5),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        tape.artistName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Explore.rowOwner.copyWith(fontSize: 12.5),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(_duration(tape.durationMs), style: Explore.caption),
-              ],
-            ),
-          ),
-        ),
+      itemBuilder: (context, i) => TrackRow(
+        tape: tapes[i],
+        nowPlaying: svc.nowPlaying?.id == tapes[i].id,
+        onTap: () => _play(tapes, i),
       ),
     );
   }
@@ -244,12 +186,5 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               ),
       ),
     );
-  }
-
-  static String _duration(int ms) {
-    final total = (ms / 1000).round();
-    final minutes = total ~/ 60;
-    final seconds = (total % 60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
   }
 }

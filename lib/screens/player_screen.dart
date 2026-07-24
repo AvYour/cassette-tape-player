@@ -11,6 +11,7 @@ import '../services/sound_service.dart';
 import '../services/spotify_service.dart';
 import '../utils/colors.dart';
 import '../utils/explore_theme.dart';
+import '../widgets/glass.dart';
 import '../utils/playback_math.dart';
 import '../utils/scrub_math.dart';
 import '../utils/tape_wind.dart';
@@ -505,10 +506,10 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     return Scaffold(
       backgroundColor: Explore.bgTop,
-      // The same lavender room as Explore. (This replaced the flowing
-      // album-colour wash: one theme end to end, and black type always reads.)
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: Explore.backdrop),
+      // The same room as Explore, its colour blooms pulled toward this song's
+      // own stripe so the glass panes below have something tinted to refract.
+      body: GlassBackdrop(
+        tint: _tape.stripeColor,
         child: SafeArea(
           child: Column(
             children: [
@@ -634,16 +635,14 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Widget _buildControlPanel() {
-    return Container(
-      decoration: BoxDecoration(
-        color: kPanelLight,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: Explore.lift,
-      ),
+    return GlassPanel(
+      radius: 24,
+      // Milkier than the browsing panes: seven keys and two meters need to sit
+      // on something solid enough to read, not a clear window.
+      fill: 0.62,
       child: Stack(
         children: [
-          // Machined seam near the top edge — one hairline now that the panel
-          // is white; the old black-over-white bevel read as a scratch.
+          // Machined seam near the top edge — one hairline glint on the glass.
           Positioned(
             top: 10,
             left: 14,

@@ -118,7 +118,7 @@ class _IconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.translate(size.width / 2, size.height / 2);
-    drawRetroIcon(canvas, icon, kMark, size.height * 0.35);
+    drawRetroIcon(canvas, icon, kInkLight, size.height * 0.35);
   }
 
   @override
@@ -245,19 +245,9 @@ class _KeyPainter extends CustomPainter {
         ),
     );
 
-    // The REC key's red is dustier than the original saturated coral: on the
-    // old black panel it was one of seven, on a white one it was the loudest
-    // thing on the screen. Still unmistakably the red key, just aged.
-    final base0 = Color.lerp(
-      isRed ? const Color(0xFFDD9086) : const Color(0xFFF7F1E6),
-      isRed ? const Color(0xFFC97C72) : const Color(0xFFDCD5C6),
-      p,
-    )!;
-    final base1 = Color.lerp(
-      isRed ? const Color(0xFFC97C72) : const Color(0xFFE3DCCF),
-      isRed ? const Color(0xFFAD6157) : const Color(0xFFC4BCAB),
-      p,
-    )!;
+    // A frosted-glass cap instead of a moulded plastic key: translucent white
+    // so the panel behind shows through, with a faint rose in the REC key.
+    final tint = isRed ? const Color(0xFFE39A91) : Colors.white;
 
     final scale = 1 - p * 0.035;
     canvas.save();
@@ -268,74 +258,63 @@ class _KeyPainter extends CustomPainter {
     // Drop shadow that tightens as the key is pressed.
     final shadowRadius = (1 - p) * 12 + p * 1.5;
     final shadowY = (1 - p) * 8 + p * 0.5;
-    // Softer than the original: on a pale socket a near-opaque black shadow
-    // ringed every key. The press still visibly tightens it.
-    final shadowAlpha = ((1 - p) * 55 + p * 120).round();
+    final shadowAlpha = ((1 - p) * 42 + p * 95).round();
     canvas.drawRRect(
       rrect.shift(Offset(0, shadowY)),
       Paint()
-        ..color = Color.fromARGB(shadowAlpha, 0, 0, 0)
+        ..color = Color.fromARGB(shadowAlpha, 40, 30, 70)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadowRadius * 0.5),
     );
 
-    // Key face.
+    // Glass body: whiter at rest, dimmer as it sinks in.
+    final faceTop = 0.82 - 0.24 * p;
+    final faceBot = 0.50 - 0.16 * p;
     canvas.drawRRect(
       rrect,
-      Paint()..shader = ui.Gradient.linear(Offset.zero, Offset(0, h), [base0, base1]),
-    );
-
-    // Machined dimple.
-    final dimpleR = w * 0.35;
-    final center = Offset(w / 2, h / 2);
-    final dimpleDark = Color.lerp(
-      isRed ? const Color(0xFFB86C62) : const Color(0xFFCAC2AE),
-      isRed ? const Color(0xFF9E574E) : const Color(0xFFA8A08E),
-      p,
-    )!;
-    final dimpleLight = Color.lerp(
-      isRed ? const Color(0xFFEDB0A7) : Colors.white,
-      isRed ? const Color(0xFFD89489) : const Color(0xFFDED6C4),
-      p,
-    )!;
-    canvas.drawCircle(
-      center,
-      dimpleR,
       Paint()
         ..shader = ui.Gradient.linear(
-          center - Offset(dimpleR, dimpleR),
-          center + Offset(dimpleR, dimpleR),
-          [dimpleDark, dimpleLight],
+          Offset.zero,
+          Offset(0, h),
+          [tint.withValues(alpha: faceTop), tint.withValues(alpha: faceBot)],
         ),
     );
-    canvas.drawCircle(
-      center,
-      dimpleR,
+
+    // Top glaze: a bright band where light catches the near edge, fading as the
+    // key presses in.
+    if (p < 0.99) {
+      final g = 1 - p;
+      canvas.save();
+      canvas.clipRRect(rrect);
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h * 0.5),
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset.zero,
+            Offset(0, h * 0.5),
+            [
+              Colors.white.withValues(alpha: 0.55 * g),
+              Colors.white.withValues(alpha: 0.0),
+            ],
+          ),
+      );
+      canvas.restore();
+    }
+
+    // Lit rim, brightest along the top edge.
+    canvas.drawRRect(
+      rrect.deflate(0.5),
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = const Color(0x15000000),
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(0, h),
+          [
+            Colors.white.withValues(alpha: 0.85),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+        ),
     );
-
-    // Bevel highlight, fading out as the key sinks.
-    if (p < 0.99) {
-      final la = (1 - p * 2).clamp(0.0, 1.0);
-      final lightBevel =
-          (isRed ? const Color(0xFFEDB8B0) : Colors.white).withValues(alpha: la);
-      final darkBevel = (isRed ? const Color(0xFFBB7268) : const Color(0xFFB5AFA1))
-          .withValues(alpha: la);
-      canvas.drawRRect(
-        rrect,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
-          ..shader = ui.Gradient.linear(
-            Offset.zero,
-            Offset(w, h),
-            [lightBevel, Colors.transparent, darkBevel],
-            const [0.0, 0.5, 1.0],
-          ),
-      );
-    }
     canvas.restore();
 
     // Pressed-in inner shadow.

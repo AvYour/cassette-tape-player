@@ -4,6 +4,7 @@ import '../models/playlist.dart';
 import '../services/spotify_service.dart';
 import '../utils/carousel_math.dart';
 import '../utils/explore_theme.dart';
+import '../widgets/glass.dart';
 import 'player_screen.dart';
 import 'playlist_screen.dart';
 import 'search_screen.dart';
@@ -198,8 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Explore.bgTop,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: Explore.backdrop),
+      body: GlassBackdrop(
         child: SafeArea(
           child: ListenableBuilder(
             listenable: svc,
@@ -308,13 +308,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(46, 14, 16, 14),
                 child: Opacity(
                   opacity: focus,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Explore.card,
-                      borderRadius: BorderRadius.circular(40),
-                      boxShadow: Explore.lift,
-                    ),
-                  ),
+                  child: const GlassPanel(radius: 40, child: SizedBox.expand()),
                 ),
               ),
             Padding(

@@ -1,11 +1,11 @@
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/cassette_tape.dart';
-import '../services/palette_service.dart';
 import '../utils/colors.dart';
+import 'glass.dart';
 
-/// Marquee-scrolling title bar styled as a cassette J-card spine
-/// (reference `VintageTitleHeader`).
+/// The now-playing title on a frosted-glass bar. The song scrolls past like a
+/// marquee while it plays; stopped, it shows the transport state. The vintage
+/// J-card it replaced — black side tab, coloured spine, cream card — is gone.
 class VintageTitleHeader extends StatefulWidget {
   final CassetteTape tape;
   final TapeState tapeState;
@@ -27,18 +27,6 @@ class _VintageTitleHeaderState extends State<VintageTitleHeader>
 
   String? _lastText;
   late TextPainter _text;
-  late Color _stripe = widget.tape.stripeColor;
-  late final TextPainter _sideA = TextPainter(
-    text: const TextSpan(
-      text: 'A',
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
-      ),
-    ),
-    textDirection: TextDirection.ltr,
-  )..layout();
 
   String get _displayText => switch (widget.tapeState) {
         TapeState.stopped => 'STOPPED',
@@ -57,9 +45,9 @@ class _VintageTitleHeaderState extends State<VintageTitleHeader>
       text: TextSpan(
         text: text,
         style: const TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w900,
-          color: kTextDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          color: kInkLight,
           letterSpacing: 0.5,
         ),
       ),
@@ -81,19 +69,6 @@ class _VintageTitleHeaderState extends State<VintageTitleHeader>
     super.initState();
     _syncText();
     _syncMarquee();
-    _resolveStripe();
-  }
-
-  void _resolveStripe() {
-    final url = widget.tape.albumArtUrl;
-    final cached = PaletteService.cached(url);
-    if (cached != null) {
-      _stripe = cached.stripe;
-    } else if (url != null && url.isNotEmpty) {
-      PaletteService.resolve(url).then((c) {
-        if (mounted && c != null) setState(() => _stripe = c.stripe);
-      });
-    }
   }
 
   @override
@@ -107,30 +82,19 @@ class _VintageTitleHeaderState extends State<VintageTitleHeader>
   void dispose() {
     _marquee.dispose();
     _text.dispose();
-    _sideA.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(2),
+    return GlassPanel(
+      radius: 16,
+      blur: 16,
+      fill: 0.42,
+      child: SizedBox.expand(
         child: CustomPaint(
-          painter: _HeaderPainter(
-            stripeColor: _stripe,
+          painter: _MarqueePainter(
             text: _text,
-            sideA: _sideA,
             playing: widget.tapeState == TapeState.playing,
             t: _marquee,
           ),
@@ -140,85 +104,35 @@ class _VintageTitleHeaderState extends State<VintageTitleHeader>
   }
 }
 
-class _HeaderPainter extends CustomPainter {
-  final Color stripeColor;
+class _MarqueePainter extends CustomPainter {
   final TextPainter text;
-  final TextPainter sideA;
   final bool playing;
   final Animation<double> t;
 
-  _HeaderPainter({
-    required this.stripeColor,
+  static const double _pad = 18;
+
+  _MarqueePainter({
     required this.text,
-    required this.sideA,
     required this.playing,
     required this.t,
   }) : super(repaint: t);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // Cream card with side shading.
-    // White J-card, matching the panel below and the lozenges on Explore.
-    canvas.drawRect(Offset.zero & size, Paint()..color = kPanelLight);
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset.zero,
-          Offset(w, 0),
-          const [
-            Color(0x1A000000),
-            Colors.transparent,
-            Colors.transparent,
-            Color(0x1A000000),
-          ],
-          const [0.0, 1 / 3, 2 / 3, 1.0],
-        ),
-    );
-
-    // Colored spine stripe on the left edge.
-    const stripeWidth = 8.0;
-    canvas.drawRect(
-        Rect.fromLTWH(0, 0, stripeWidth, h), Paint()..color = stripeColor);
-
-    // Side "A" box.
-    final boxSize = h * 0.55;
-    const boxX = stripeWidth + 8;
-    final boxY = (h - boxSize) / 2;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Rect.fromLTWH(boxX, boxY, boxSize, boxSize), const Radius.circular(2)),
-      Paint()..color = kTextDark,
-    );
-    sideA.paint(
-      canvas,
-      Offset(
-        boxX + (boxSize - sideA.width) / 2,
-        boxY + (boxSize - sideA.height) / 2,
-      ),
-    );
-
-    // Title text, marquee-scrolled while playing.
-    final textStartX = boxX + boxSize + 12;
-    final textY = (h - text.height) / 2;
+    final textY = (size.height - text.height) / 2;
     canvas.save();
-    canvas.clipRect(Rect.fromLTRB(textStartX, 0, w, h));
+    canvas.clipRect(Rect.fromLTWH(_pad, 0, size.width - _pad, size.height));
     if (playing) {
       final scroll = -t.value * text.width;
-      text.paint(canvas, Offset(textStartX + scroll, textY));
-      text.paint(canvas, Offset(textStartX + scroll + text.width, textY));
+      text.paint(canvas, Offset(_pad + scroll, textY));
+      text.paint(canvas, Offset(_pad + scroll + text.width, textY));
     } else {
-      text.paint(canvas, Offset(textStartX, textY));
+      text.paint(canvas, Offset(_pad, textY));
     }
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(_HeaderPainter old) =>
-      old.stripeColor != stripeColor ||
-      old.text != text ||
-      old.playing != playing;
+  bool shouldRepaint(_MarqueePainter old) =>
+      old.text != text || old.playing != playing;
 }

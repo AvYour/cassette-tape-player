@@ -104,38 +104,44 @@ class _EjectPainter extends CustomPainter {
     canvas.scale(scale);
     canvas.translate(-w / 2, -h / 2);
 
-    // Drop shadow.
+    // Drop shadow — soft lavender-black, matching the frosted keys.
     final shadowRadius = (1 - p) * 8 + p * 2;
     final shadowY = (1 - p) * 6 + p * 1;
-    final shadowAlpha = (180 + p * 70).round();
+    final shadowAlpha = (48 + p * 45).round();
     canvas.drawRRect(
       rrect.shift(Offset(0, shadowY)),
       Paint()
-        ..color = Color.fromARGB(shadowAlpha, 0, 0, 0)
+        ..color = Color.fromARGB(shadowAlpha, 40, 30, 70)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadowRadius * 0.5),
     );
 
-    // Body.
-    // Same ivory key-cap as the seven transport keys, so the deck speaks one
-    // material instead of a dark bar over pale buttons.
-    final base0 = Color.lerp(const Color(0xFFF7F1E6), const Color(0xFFE3DCCF), p)!;
-    final base1 = Color.lerp(const Color(0xFFE3DCCF), const Color(0xFFC4BCAB), p)!;
+    // Frosted-glass cap, the same material as the transport keys.
+    final faceTop = 0.82 - 0.24 * p;
+    final faceBot = 0.50 - 0.16 * p;
     canvas.drawRRect(
       rrect,
-      Paint()..shader = ui.Gradient.linear(Offset.zero, Offset(0, h), [base0, base1]),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(0, h),
+          [
+            Colors.white.withValues(alpha: faceTop),
+            Colors.white.withValues(alpha: faceBot),
+          ],
+        ),
     );
 
-    // Grip ribs along the right edge.
+    // Grip ribs along the right edge, drawn as faint glass etchings.
     const ribsCount = 5;
     const ribSpacing = 5.0;
     final startX = w - (ribsCount * ribSpacing) - 8;
     final ribTop = h * 0.2;
     final ribBottom = h * 0.8;
     final ribLight = Paint()
-      ..color = const Color(0x22FFFFFF)
+      ..color = const Color(0x66FFFFFF)
       ..strokeWidth = 1;
     final ribDark = Paint()
-      ..color = const Color(0x66000000)
+      ..color = const Color(0x1A2A1E46)
       ..strokeWidth = 1;
     for (int i = 0; i < ribsCount; i++) {
       final x = startX + i * ribSpacing;
@@ -143,26 +149,41 @@ class _EjectPainter extends CustomPainter {
       canvas.drawLine(Offset(x + 1, ribTop), Offset(x + 1, ribBottom), ribDark);
     }
 
-    // Bevel edge, dimming with press.
+    // Top glaze band.
     if (p < 0.99) {
-      final la = (1 - p * 2).clamp(0.0, 1.0);
-      canvas.drawRRect(
-        rrect,
+      final g = 1 - p;
+      canvas.save();
+      canvas.clipRRect(rrect);
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h * 0.5),
         Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
           ..shader = ui.Gradient.linear(
             Offset.zero,
-            Offset(0, h),
+            Offset(0, h * 0.5),
             [
-              Colors.white.withValues(alpha: la * 0.3),
-              Colors.transparent,
-              Colors.black.withValues(alpha: la * 0.8),
+              Colors.white.withValues(alpha: 0.5 * g),
+              Colors.white.withValues(alpha: 0.0),
             ],
-            const [0.0, 0.5, 1.0],
           ),
       );
+      canvas.restore();
     }
+
+    // Lit rim, brightest along the top.
+    canvas.drawRRect(
+      rrect.deflate(0.5),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(0, h),
+          [
+            Colors.white.withValues(alpha: 0.85),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+        ),
+    );
     canvas.restore();
   }
 

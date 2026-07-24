@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/cassette_tape.dart';
@@ -97,12 +98,74 @@ class CassetteTapeView extends StatelessWidget {
                       ),
               ),
               const CustomPaint(painter: CassetteFrontPainter()),
+              // A pane of glass laid over the shell: a diagonal sheen and a
+              // bright top edge, so the cassette matches the frosted panels
+              // around it. Non-interactive; the reels still show through.
+              IgnorePointer(
+                child: CustomPaint(
+                  painter: _CassetteGlaze(radius: radius),
+                ),
+              ),
             ],
           );
         },
       ),
     );
   }
+}
+
+/// The glaze on the cassette: one diagonal band of light across the shell and
+/// a lit rim, drawn over everything else. Kept to low alphas — enough to read
+/// as glass, not enough to fog the album art underneath.
+class _CassetteGlaze extends CustomPainter {
+  final double radius;
+
+  const _CassetteGlaze({required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+        Offset.zero & size, Radius.circular(radius));
+    canvas.save();
+    canvas.clipRRect(rrect);
+
+    // The sweep of light, running corner to corner.
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(size.width, size.height),
+          [
+            Colors.white.withValues(alpha: 0.26),
+            Colors.white.withValues(alpha: 0.05),
+            Colors.white.withValues(alpha: 0.0),
+            Colors.white.withValues(alpha: 0.10),
+          ],
+          const [0.0, 0.30, 0.62, 1.0],
+        ),
+    );
+    canvas.restore();
+
+    // Lit rim: brightest along the top edge, fading down the sides.
+    canvas.drawRRect(
+      rrect.deflate(0.5),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(0, size.height),
+          [
+            Colors.white.withValues(alpha: 0.72),
+            Colors.white.withValues(alpha: 0.12),
+          ],
+        ),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CassetteGlaze old) => old.radius != radius;
 }
 
 /// Hero flight that rotates the cassette between its upright pager pose
