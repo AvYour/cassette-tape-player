@@ -75,6 +75,28 @@ void main() {
       expect(tapes.last.contextIndex, 2);
     });
 
+    test('parses a /me/tracks saved-tracks page (track nested under `track`)',
+        () {
+      final saved = [
+        {
+          'added_at': '2026-01-02T03:04:05Z',
+          'track': {
+            'id': 'liked1',
+            'type': 'track',
+            'uri': 'spotify:track:liked1',
+            'name': 'Liked One',
+            'artists': [
+              {'name': 'A'}
+            ],
+            'album': {'images': []},
+          }
+        },
+      ];
+      final tapes = PlaylistPaging.tapesFromPage(saved, pageOffset: 0);
+      expect(tapes.single.id, 'liked1');
+      expect(tapes.single.trackName, 'Liked One');
+    });
+
     test('reads the legacy `track` field when `item` is absent', () {
       final legacy = [
         {
@@ -93,6 +115,33 @@ void main() {
       final tapes = PlaylistPaging.tapesFromPage(legacy, pageOffset: 0);
       expect(tapes.single.id, 'x');
       expect(tapes.single.contextIndex, 0);
+    });
+  });
+
+  group('PlaylistPaging.dedupeById', () {
+    // Recently-played is a play history, not a set: replay the same song three
+    // times and it comes back three times.
+    test('keeps the first occurrence of each track, in order', () {
+      final tapes = PlaylistPaging.tapesFromPage([
+        _entry('a'),
+        _entry('b'),
+        _entry('a'),
+        _entry('c'),
+        _entry('b'),
+      ], pageOffset: 0);
+
+      final deduped = PlaylistPaging.dedupeById(tapes);
+      expect(deduped.map((t) => t.id), ['a', 'b', 'c']);
+    });
+
+    test('leaves an already-unique list untouched', () {
+      final tapes =
+          PlaylistPaging.tapesFromPage([_entry('a'), _entry('b')], pageOffset: 0);
+      expect(PlaylistPaging.dedupeById(tapes).length, 2);
+    });
+
+    test('handles an empty list', () {
+      expect(PlaylistPaging.dedupeById(const []), isEmpty);
     });
   });
 }

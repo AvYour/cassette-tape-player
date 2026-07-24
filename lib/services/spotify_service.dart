@@ -214,10 +214,30 @@ class SpotifyService extends ChangeNotifier {
           .map((e) => Playlist.fromJson(e.value, e.key))
           .toList();
       // Keep only playlists the user created (owns), when we know the id.
-      _playlists =
+      final owned =
           userId == null ? all : all.where((p) => p.ownerId == userId).toList();
+      // Your library and your history lead: they are two shelves every account
+      // has, neither is a playlist, and so /me/playlists never mentions them.
+      _playlists = [
+        Playlist.liked(total: await _fetchLikedTotal()),
+        Playlist.recentlyPlayed(),
+        ...owned,
+      ];
       notifyListeners();
     } catch (_) {}
+  }
+
+  /// How many songs are saved, read off a one-item page's `total`. Only feeds
+  /// the row's subtitle, so a failure just means no count is shown.
+  Future<int> _fetchLikedTotal() async {
+    try {
+      final res = await _authedGet(
+          Uri.parse('https://api.spotify.com/v1/me/tracks?limit=1'));
+      if (res.statusCode != 200) return 0;
+      return (json.decode(res.body)['total'] as int?) ?? 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   /// Loads the tracks of a playlist as cassettes, caching them on the model.
@@ -236,37 +256,15 @@ class SpotifyService extends ChangeNotifier {
     playlist.loadError = null;
     notifyListeners();
     try {
-      // Feb 2026 API: /tracks was renamed to /items. Page through all tracks
-      // (up to a sane cap) so the whole playlist is shown, not just the first.
-      final tapes = <CassetteTape>[];
-      const pageSize = 50;
-      const maxTracks = 300;
-      int offset = 0;
-      String? error;
-      while (offset < maxTracks) {
-        final res = await _authedGet(
-          // market=from_token relative-links the user's market so Spotify sets
-          // `is_playable`, letting us drop tracks that have gone unplayable.
-          Uri.parse('https://api.spotify.com/v1/playlists/${playlist.id}/items'
-              '?limit=$pageSize&offset=$offset&market=from_token'),
-        );
-        if (res.statusCode != 200) {
-          if (offset == 0) error = _apiError(res.statusCode, res.body);
-          break;
-        }
-        final body = json.decode(res.body) as Map<String, dynamic>;
-        final items = (body['items'] as List?) ?? [];
-        // Tag each track with its TRUE playlist position so context playback
-        // (skipToIndex) isn't thrown off by filtered-out items (episodes/nulls).
-        tapes.addAll(PlaylistPaging.tapesFromPage(items, pageOffset: offset));
-        if (items.length < pageSize || body['next'] == null) break;
-        offset += pageSize;
-      }
-      playlist.tapes = tapes;
-      if (tapes.isEmpty) {
-        playlist.loadError = error ??
-            'No items returned. Spotify only exposes tracks for playlists you '
-                'own or collaborate on (Feb 2026 API change).';
+      switch (playlist.kind) {
+        case PlaylistKind.liked:
+          await _loadSavedTracks(playlist);
+        case PlaylistKind.recent:
+          await _loadRecentlyPlayed(playlist);
+        case PlaylistKind.demo:
+          break; // preloaded
+        case PlaylistKind.spotify:
+          await _loadPlaylistItems(playlist);
       }
     } catch (e) {
       playlist.tapes = [];
@@ -274,6 +272,91 @@ class SpotifyService extends ChangeNotifier {
     }
     playlist.loading = false;
     notifyListeners();
+  }
+
+  /// A real playlist. Feb 2026 API: `/tracks` was renamed to `/items`. Pages
+  /// through the whole thing (up to a sane cap) rather than the first 50.
+  Future<void> _loadPlaylistItems(Playlist playlist) async {
+    final tapes = <CassetteTape>[];
+    const pageSize = 50;
+    const maxTracks = 300;
+    int offset = 0;
+    String? error;
+    while (offset < maxTracks) {
+      final res = await _authedGet(
+        // market=from_token relative-links the user's market so Spotify sets
+        // `is_playable`, letting us drop tracks that have gone unplayable.
+        Uri.parse('https://api.spotify.com/v1/playlists/${playlist.id}/items'
+            '?limit=$pageSize&offset=$offset&market=from_token'),
+      );
+      if (res.statusCode != 200) {
+        if (offset == 0) error = _apiError(res.statusCode, res.body);
+        break;
+      }
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      final items = (body['items'] as List?) ?? [];
+      // Tag each track with its TRUE playlist position so context playback
+      // (skipToIndex) isn't thrown off by filtered-out items (episodes/nulls).
+      tapes.addAll(PlaylistPaging.tapesFromPage(items, pageOffset: offset));
+      if (items.length < pageSize || body['next'] == null) break;
+      offset += pageSize;
+    }
+    playlist.tapes = tapes;
+    if (tapes.isEmpty) {
+      playlist.loadError = error ??
+          'No items returned. Spotify only exposes tracks for playlists you '
+              'own or collaborate on (Feb 2026 API change).';
+    }
+  }
+
+  /// Saved songs — `GET /me/tracks` (scope `user-library-read`). Offset-paged
+  /// like a playlist, newest save first; each item nests its track.
+  Future<void> _loadSavedTracks(Playlist playlist) async {
+    final tapes = <CassetteTape>[];
+    const pageSize = 50;
+    const maxTracks = 300;
+    int offset = 0;
+    String? error;
+    while (offset < maxTracks) {
+      final res = await _authedGet(Uri.parse(
+          'https://api.spotify.com/v1/me/tracks'
+          '?limit=$pageSize&offset=$offset&market=from_token'));
+      if (res.statusCode != 200) {
+        if (offset == 0) error = _apiError(res.statusCode, res.body);
+        break;
+      }
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      final items = (body['items'] as List?) ?? [];
+      tapes.addAll(PlaylistPaging.tapesFromPage(items, pageOffset: offset));
+      if (items.length < pageSize || body['next'] == null) break;
+      offset += pageSize;
+    }
+    playlist.tapes = tapes;
+    if (tapes.isEmpty) {
+      playlist.loadError = error ?? 'You have not saved any songs yet.';
+    }
+  }
+
+  /// Listening history — `GET /me/player/recently-played` (scope
+  /// `user-read-recently-played`). Cursor-paged, not offset-paged, and capped
+  /// at 50 by Spotify, so this takes the one page and stops. It is a history,
+  /// so the same song can appear several times; [PlaylistPaging.dedupeById]
+  /// collapses the repeats.
+  Future<void> _loadRecentlyPlayed(Playlist playlist) async {
+    final res = await _authedGet(Uri.parse(
+        'https://api.spotify.com/v1/me/player/recently-played?limit=50'));
+    if (res.statusCode != 200) {
+      playlist.tapes = [];
+      playlist.loadError = _apiError(res.statusCode, res.body);
+      return;
+    }
+    final items = (json.decode(res.body)['items'] as List?) ?? [];
+    final tapes = PlaylistPaging.dedupeById(
+        PlaylistPaging.tapesFromPage(items, pageOffset: 0));
+    playlist.tapes = tapes;
+    if (tapes.isEmpty) {
+      playlist.loadError = 'Nothing played recently.';
+    }
   }
 
   /// Searches Spotify's catalogue for tracks matching [query].

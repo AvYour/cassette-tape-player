@@ -34,4 +34,15 @@ class PlaylistPaging {
     }
     return tapes;
   }
+
+  /// Collapses repeats, keeping the first of each track id. Recently-played is
+  /// a play *history*: put a song on four times and it comes back four times,
+  /// which reads as a stutter rather than a shelf.
+  static List<CassetteTape> dedupeById(List<CassetteTape> tapes) {
+    final seen = <String>{};
+    return [
+      for (final tape in tapes)
+        if (seen.add(tape.id)) tape,
+    ];
+  }
 }
