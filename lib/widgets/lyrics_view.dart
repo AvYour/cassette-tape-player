@@ -4,17 +4,70 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/colors.dart';
 
+/// Reads a tap on the lyric reel back into a line number.
+class LyricsHit {
+  const LyricsHit._();
+
+  /// Height of one lyric line — must match what the painter draws with.
+  static const double lineHeight = 50;
+
+  /// The line under [dy] on a reel of [height], wound to [progress] lines.
+  ///
+  /// Inverts the painter's own placement (line i sits at
+  /// `centerY + (i - progress) * lineHeight`) and rounds to the nearest line.
+  /// The result can fall outside the lyric list when the tap lands on the
+  /// faded margins; the caller decides whether to honour it.
+  static int lineAt({
+    required double dy,
+    required double height,
+    required double progress,
+    double lineHeight = lineHeight,
+  }) {
+    if (lineHeight <= 0) return progress.round();
+    final centerY = height / 2;
+    return (progress + (dy - centerY) / lineHeight).round();
+  }
+}
+
 /// Center-focused scrolling lyric reel (reference `VintageReelsLyrics`):
 /// the active line is larger and darker, neighbours shrink and fade, and the
 /// whole column winds with the tape via [progress] (in line units).
+///
+/// With [onSeekLine] set, tapping a line reports it — synced lyrics carry a
+/// timestamp per line, so the reel doubles as a way to jump through the song.
 class VintageLyrics extends StatelessWidget {
   final List<String> lyrics;
   final ValueListenable<double> progress;
+  final void Function(int line)? onSeekLine;
 
-  const VintageLyrics({super.key, required this.lyrics, required this.progress});
+  const VintageLyrics({
+    super.key,
+    required this.lyrics,
+    required this.progress,
+    this.onSeekLine,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final reel = _reel();
+    if (onSeekLine == null) return reel;
+    return LayoutBuilder(
+      builder: (context, cons) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (details) {
+          final line = LyricsHit.lineAt(
+            dy: details.localPosition.dy,
+            height: cons.maxHeight,
+            progress: progress.value,
+          );
+          if (line >= 0 && line < lyrics.length) onSeekLine!(line);
+        },
+        child: reel,
+      ),
+    );
+  }
+
+  Widget _reel() {
     return ClipRect(
       child: ShaderMask(
         blendMode: BlendMode.dstIn,
@@ -47,7 +100,9 @@ class _LyricsPainter extends CustomPainter {
 
   const _LyricsPainter({required this.lyrics, required this.progress});
 
-  static const double _lineHeight = 50;
+  // Shared with LyricsHit so a tap is read back through the same spacing the
+  // reel was drawn with.
+  static const double _lineHeight = LyricsHit.lineHeight;
   static const double _maxScale = 1.1;
 
   @override

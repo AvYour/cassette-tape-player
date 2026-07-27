@@ -5,6 +5,8 @@ import '../models/playlist.dart';
 import '../services/spotify_service.dart';
 import '../utils/explore_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/mini_player_bar.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/track_row.dart';
 import 'player_screen.dart';
 
@@ -75,13 +77,16 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             listenable: svc,
             builder: (context, _) {
               final tapes = playlist.tapes;
-              return Column(
-                children: [
-                  _topBar(),
-                  _headerCard(tapes),
-                  if (playlist.kind == PlaylistKind.top) _rangeChips(),
-                  Expanded(child: _body(tapes)),
-                ],
+              return MiniPlayerOverlay(
+                service: svc,
+                child: Column(
+                  children: [
+                    _topBar(),
+                    _headerCard(tapes),
+                    if (playlist.kind == PlaylistKind.top) _rangeChips(),
+                    Expanded(child: _body(tapes)),
+                  ],
+                ),
               );
             },
           ),
@@ -163,9 +168,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   Widget _body(List<CassetteTape>? tapes) {
     if (playlist.loading && (tapes == null || tapes.isEmpty)) {
-      return const Center(
-        child: CircularProgressIndicator(color: Explore.ink, strokeWidth: 2.4),
-      );
+      return const SkeletonList();
     }
     if (tapes == null || tapes.isEmpty) {
       return Center(
@@ -180,7 +183,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
       itemCount: tapes.length,
       itemBuilder: (context, i) => TrackRow(
         tape: tapes[i],

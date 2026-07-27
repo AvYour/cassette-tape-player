@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/cassette_tape.dart';
+import '../models/track_info.dart';
 import '../painters/cassette_tape_painter.dart';
 import '../services/lyrics_service.dart';
 import '../services/sound_service.dart';
@@ -20,6 +21,7 @@ import '../widgets/cassette_tape_view.dart';
 import '../widgets/eject_button.dart';
 import '../widgets/liner_notes_sheet.dart';
 import '../widgets/lyrics_view.dart';
+import '../widgets/queue_sheet.dart';
 import '../widgets/skeuo_button.dart';
 import '../widgets/title_header.dart';
 import '../widgets/volume_tuner.dart';
@@ -394,6 +396,99 @@ class _PlayerScreenState extends State<PlayerScreen>
     widget.spotifyService.seekTo(_positionMs.round());
   }
 
+  /// A line of facts about the song, on the deck itself rather than only
+  /// behind a tap: artist · album · year, then the track number when Spotify
+  /// knows it. Fills in from the tape immediately and sharpens when the Web
+  /// API answers; tapping opens the full liner notes.
+  Widget _trackFacts() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 10, 28, 0),
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          LinerNotesSheet.show(context, _tape, widget.spotifyService);
+        },
+        behavior: HitTestBehavior.opaque,
+        child: FutureBuilder<TrackInfo?>(
+          future: widget.spotifyService.fetchTrackInfo(_tape),
+          builder: (context, snap) {
+            final info = snap.data;
+            final artist = info?.artistsLine.isNotEmpty == true
+                ? info!.artistsLine
+                : _tape.artistName;
+            final album = info?.albumName.isNotEmpty == true
+                ? info!.albumName
+                : _tape.albumName;
+            final year =
+                info?.releaseYear.isNotEmpty == true ? info!.releaseYear : _tape.year;
+            final parts = [
+              if (artist.isNotEmpty) artist,
+              if (album.isNotEmpty) album,
+              if (year.isNotEmpty) year,
+            ];
+            return Column(
+              children: [
+                Text(
+                  parts.join('  ·  '),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.robotoMono(
+                    fontSize: 10.5,
+                    height: 1.5,
+                    letterSpacing: 0.5,
+                    color: kInkMuted,
+                  ),
+                ),
+                if ((info?.trackNumber ?? 0) > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      'SIDE A · TRACK ${info!.trackNumber}'
+                      '${info.explicit ? '  ·  EXPLICIT' : ''}',
+                      style: GoogleFonts.robotoMono(
+                        fontSize: 9,
+                        letterSpacing: 1.5,
+                        color: kInkMuted.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Opens the rest of the tape box, and jumps straight to whatever is picked.
+  void _openQueue() {
+    if (widget.queue.length < 2) return;
+    HapticFeedback.selectionClick();
+    QueueSheet.show(
+      context,
+      queue: widget.queue,
+      index: _index,
+      onJump: _goToIndex,
+    );
+  }
+
+  /// Tapping a lyric line jumps the song to that line. Only synced lyrics
+  /// carry timestamps; liner-note lines have none, so a tap there does nothing.
+  void _seekToLyricLine(int line) {
+    final times = _lyricTimesMs;
+    if (times == null || line < 0 || line >= times.length) return;
+    HapticFeedback.selectionClick();
+    final target = times[line].toDouble();
+    _anchor(target);
+    _lyricLineHint = line;
+    // Same settle as a scrub: ignore Spotify's position briefly so a stale
+    // report doesn't snap the tape back.
+    _ignoreFollowUntil = DateTime.now().add(const Duration(seconds: 2));
+    _lastPoll = DateTime.now();
+    widget.spotifyService.seekTo(target.round());
+  }
+
   void _eject() {
     // Eject stops playback for good and clears the mini-player.
     SoundService.eject();
@@ -563,13 +658,26 @@ class _PlayerScreenState extends State<PlayerScreen>
                       _HeartButton(saved: _saved, onTap: _toggleSaved),
                       const SizedBox(width: 14),
                     ],
-                    // Where we are in the box of tapes.
-                    Text(
-                      'TAPE ${_index + 1} OF ${widget.queue.length}',
-                      style: GoogleFonts.robotoMono(
-                        fontSize: 10,
-                        letterSpacing: 2,
-                        color: kInkMuted,
+                    // Where we are in the box of tapes — and the way into the
+                    // rest of it.
+                    GestureDetector(
+                      onTap: _openQueue,
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'TAPE ${_index + 1} OF ${widget.queue.length}',
+                            style: GoogleFonts.robotoMono(
+                              fontSize: 10,
+                              letterSpacing: 2,
+                              color: kInkMuted,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.queue_music_rounded,
+                              size: 18, color: kInkMuted),
+                        ],
                       ),
                     ),
                   ],
@@ -602,7 +710,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              _trackFacts(),
+              const SizedBox(height: 20),
               FractionallySizedBox(
                 widthFactor: 0.9,
                 child: LayoutBuilder(
@@ -645,6 +754,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                         child: VintageLyrics(
                           lyrics: _lyrics,
                           progress: _lyricProgress,
+                          // Only offered when the lines are timestamped;
+                          // liner notes have nowhere to jump to.
+                          onSeekLine:
+                              _lyricTimesMs == null ? null : _seekToLyricLine,
                         ),
                       ),
                     ),

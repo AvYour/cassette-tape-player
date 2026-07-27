@@ -1,18 +1,57 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../screens/player_screen.dart';
 import '../services/spotify_service.dart';
-import '../utils/colors.dart';
+import '../utils/explore_theme.dart';
+import 'glass.dart';
 
-/// A Spotify-style now-playing bar shown at the bottom of the cabinet/search
-/// screens after the full player is dismissed with Back (not Eject). Tapping it
-/// reopens the full player; the play/pause button toggles playback in place.
+/// Floats a [MiniPlayerBar] over a page instead of stacking it in the layout,
+/// so the bar appears the moment something plays without shrinking the list
+/// underneath it. Lists should leave [kMiniPlayerInset] of bottom padding so
+/// their last row can still be scrolled clear of the bar.
+class MiniPlayerOverlay extends StatelessWidget {
+  final SpotifyService service;
+  final Widget child;
+
+  /// Distance from the bottom of the page — raise it above a nav bar.
+  final double bottomInset;
+
+  const MiniPlayerOverlay({
+    super.key,
+    required this.service,
+    required this.child,
+    this.bottomInset = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: bottomInset,
+          child: MiniPlayerBar(service: service),
+        ),
+      ],
+    );
+  }
+}
+
+/// Bottom padding a scrollable should reserve so the floating bar never covers
+/// its last row.
+const double kMiniPlayerInset = 96;
+
+/// A frosted "now playing" bar for the bottom of Explore and Search. Shows the
+/// loaded tape, toggles play/pause in place, and taps through to the full
+/// player. Hides itself when nothing is loaded.
 class MiniPlayerBar extends StatelessWidget {
   final SpotifyService service;
 
   const MiniPlayerBar({super.key, required this.service});
 
   void _open(BuildContext context) {
+    if (service.nowPlaying == null) return;
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -38,103 +77,58 @@ class MiniPlayerBar extends StatelessWidget {
       builder: (context, _) {
         final tape = service.nowPlaying;
         if (tape == null) return const SizedBox.shrink();
-        final playing = service.isPlaying;
         final art = tape.thumbUrl;
-
+        final playing = service.isPlaying;
         return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-          child: Material(
-            color: Colors.transparent,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: GlassPanel(
+            radius: 20,
+            fill: 0.6,
             child: InkWell(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(20),
               onTap: () => _open(context),
-              child: Container(
-                height: 62,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF2A2724), Color(0xFF17150F)],
-                  ),
-                  border: const Border(
-                    top: BorderSide(color: Color(0x14FFFFFF), width: 1),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
                 child: Row(
                   children: [
-                    // The loaded tape's accent stripe.
-                    Container(
-                      width: 4,
-                      height: 40,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: tape.stripeColor,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    // Album art thumbnail.
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(12),
                       child: SizedBox(
-                        width: 42,
-                        height: 42,
-                        child: art != null && art.isNotEmpty
-                            ? Image.network(art,
-                                fit: BoxFit.cover,
-                                cacheWidth: 130,
-                                errorBuilder: (_, __, ___) => _artFallback())
-                            : _artFallback(),
+                        width: 44,
+                        height: 44,
+                        child: art == null || art.isEmpty
+                            ? Container(color: tape.stripeColor)
+                            : Image.network(art,
+                                fit: BoxFit.cover, cacheWidth: 132),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            tape.trackName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.specialElite(
-                              fontSize: 13,
-                              color: const Color(0xFFF4EFE6),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            tape.artistName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.courierPrime(
-                              fontSize: 11,
-                              color: const Color(0xFFF4EFE6)
-                                  .withValues(alpha: 0.6),
-                            ),
-                          ),
+                          Text(tape.trackName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Explore.rowTitle.copyWith(fontSize: 14.5)),
+                          Text(tape.artistName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Explore.rowOwner.copyWith(fontSize: 12)),
                         ],
                       ),
                     ),
                     IconButton(
+                      onPressed: () =>
+                          playing ? service.pause() : service.resume(),
                       icon: Icon(
                         playing
                             ? Icons.pause_rounded
                             : Icons.play_arrow_rounded,
-                        color: const Color(0xFFF4EFE6),
+                        color: Explore.ink,
                         size: 30,
                       ),
-                      onPressed: () =>
-                          playing ? service.pause() : service.resume(),
                     ),
                   ],
                 ),
@@ -145,9 +139,4 @@ class MiniPlayerBar extends StatelessWidget {
       },
     );
   }
-
-  Widget _artFallback() => Container(
-        color: const Color(0xFF161616),
-        child: const Icon(Icons.music_note, color: kMark, size: 20),
-      );
 }

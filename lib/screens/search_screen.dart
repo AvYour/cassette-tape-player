@@ -5,6 +5,8 @@ import '../services/spotify_service.dart';
 import '../utils/debouncer.dart';
 import '../utils/explore_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/mini_player_bar.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/track_row.dart';
 import 'album_screen.dart';
 import 'artist_screen.dart';
@@ -126,11 +128,14 @@ class _SearchScreenState extends State<SearchScreen>
         child: SafeArea(
           child: ListenableBuilder(
             listenable: svc,
-            builder: (context, _) => Column(
-              children: [
-                _searchBar(),
-                Expanded(child: _buildBody()),
-              ],
+            builder: (context, _) => MiniPlayerOverlay(
+              service: svc,
+              child: Column(
+                children: [
+                  _searchBar(),
+                  Expanded(child: _buildBody()),
+                ],
+              ),
             ),
           ),
         ),
@@ -204,14 +209,7 @@ class _SearchScreenState extends State<SearchScreen>
           'permissions.');
     }
     if (_searching) {
-      return const Center(
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(
-              strokeWidth: 2.4, color: Explore.ink),
-        ),
-      );
+      return const SkeletonList(count: 6);
     }
     if (_lastQuery.isEmpty) {
       return _emptyState();

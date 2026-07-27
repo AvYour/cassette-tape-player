@@ -5,9 +5,14 @@ import '../services/spotify_service.dart';
 import '../utils/carousel_math.dart';
 import '../utils/explore_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/mini_player_bar.dart';
+import '../widgets/skeleton.dart';
+import 'following_screen.dart';
 import 'player_screen.dart';
 import 'playlist_screen.dart';
+import 'saved_albums_screen.dart';
 import 'search_screen.dart';
+import 'settings_screen.dart';
 
 /// Home: your playlists on a slow vertical wheel. The row under the reading
 /// line sits full-size on a white lozenge and is the only one that offers
@@ -86,6 +91,28 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     HapticFeedback.selectionClick();
+    // Portal rows (Saved Albums, Following) aren't track lists — they open
+    // their own browse screen instead of the playlist screen.
+    switch (playlist.kind) {
+      case PlaylistKind.savedAlbums:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SavedAlbumsScreen(spotifyService: svc),
+          ),
+        );
+        return;
+      case PlaylistKind.following:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FollowingScreen(spotifyService: svc),
+          ),
+        );
+        return;
+      default:
+        break;
+    }
     svc.loadPlaylistTracks(playlist);
     Navigator.push(
       context,
@@ -189,6 +216,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 _openSearch();
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.settings_rounded, color: Explore.ink),
+              title: Text('Settings', style: Explore.chip),
+              onTap: () {
+                Navigator.pop(sheet);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SettingsScreen(spotifyService: svc),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -204,12 +244,23 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ListenableBuilder(
             listenable: svc,
             builder: (context, _) {
+              // While the connect is still in flight, show skeleton rows rather
+              // than the starter mixtape — the demo is the offline fallback for
+              // when there is genuinely nothing, not a stand-in for "loading".
+              final loading = svc.playlists.isEmpty && svc.isLoading;
               final playlists =
                   svc.playlists.isEmpty ? [_demo] : svc.playlists;
               return Column(
                 children: [
                   _header(),
-                  Expanded(child: _buildWheel(playlists)),
+                  Expanded(
+                    child: loading
+                        ? const SkeletonWheel(rowExtent: _rowExtent)
+                        : MiniPlayerOverlay(
+                            service: svc,
+                            child: _buildWheel(playlists),
+                          ),
+                  ),
                   _navBar(),
                 ],
               );
@@ -338,7 +389,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                  if (chipOpacity > 0)
+                  // Portal rows open a list, not a track queue, so they show a
+                  // chevron where a track shelf shows Play.
+                  if (kPortalKinds.contains(playlist.kind))
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: Icon(Icons.chevron_right_rounded,
+                          color: Explore.muted, size: 26),
+                    )
+                  else if (chipOpacity > 0)
                     Opacity(
                       opacity: chipOpacity,
                       child: _playChip(playlist),
@@ -402,6 +461,8 @@ class _HomeScreenState extends State<HomeScreen> {
     PlaylistKind.liked: Icons.favorite_rounded,
     PlaylistKind.top: Icons.trending_up_rounded,
     PlaylistKind.recent: Icons.history_rounded,
+    PlaylistKind.savedAlbums: Icons.bookmark_rounded,
+    PlaylistKind.following: Icons.people_alt_rounded,
   };
 
   Widget _coverFallback(Playlist playlist, double size) {

@@ -5,6 +5,8 @@ import '../models/cassette_tape.dart';
 import '../services/spotify_service.dart';
 import '../utils/explore_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/mini_player_bar.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/track_row.dart';
 import 'player_screen.dart';
 
@@ -31,6 +33,9 @@ class _AlbumScreenState extends State<AlbumScreen> {
   List<CassetteTape>? _tapes;
   bool _loading = true;
 
+  // Null until /me/albums/contains answers.
+  bool? _saved;
+
   @override
   void initState() {
     super.initState();
@@ -39,11 +44,22 @@ class _AlbumScreenState extends State<AlbumScreen> {
 
   Future<void> _load() async {
     final tapes = await svc.loadAlbumTracks(album.id);
+    final saved = await svc.isAlbumSaved(album.id);
     if (!mounted) return;
     setState(() {
       _tapes = tapes;
+      _saved = saved;
       _loading = false;
     });
+  }
+
+  Future<void> _toggleSaved() async {
+    final next = !(_saved ?? false);
+    HapticFeedback.lightImpact();
+    setState(() => _saved = next);
+    final result = await svc.setAlbumSaved(album.id, next);
+    if (!mounted) return;
+    setState(() => _saved = result);
   }
 
   void _play(List<CassetteTape> tapes, int index) {
@@ -67,12 +83,15 @@ class _AlbumScreenState extends State<AlbumScreen> {
       backgroundColor: Explore.bgTop,
       body: GlassBackdrop(
         child: SafeArea(
-          child: Column(
-            children: [
-              _topBar(),
-              _header(),
-              Expanded(child: _body()),
-            ],
+          child: MiniPlayerOverlay(
+            service: svc,
+            child: Column(
+              children: [
+                _topBar(),
+                _header(),
+                Expanded(child: _body()),
+              ],
+            ),
           ),
         ),
       ),
@@ -87,6 +106,22 @@ class _AlbumScreenState extends State<AlbumScreen> {
               onPressed: () => Navigator.maybePop(context),
               icon: const Icon(Icons.arrow_back_rounded, color: Explore.ink),
               tooltip: 'Back',
+            ),
+            const Spacer(),
+            IconButton(
+              onPressed: _saved == null ? null : _toggleSaved,
+              tooltip: (_saved ?? false) ? 'Remove from library' : 'Save album',
+              icon: Icon(
+                (_saved ?? false)
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded,
+                color: _saved == null
+                    ? Explore.muted.withValues(alpha: 0.4)
+                    : (_saved ?? false)
+                        ? const Color(0xFFE0526B)
+                        : Explore.ink,
+                size: 26,
+              ),
             ),
           ],
         ),
@@ -133,9 +168,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
 
   Widget _body() {
     if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Explore.ink, strokeWidth: 2.4),
-      );
+      return const SkeletonList();
     }
     final tapes = _tapes ?? const [];
     if (tapes.isEmpty) {
@@ -148,7 +181,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
       itemCount: tapes.length,
       itemBuilder: (context, i) => TrackRow(
         tape: tapes[i],
