@@ -87,6 +87,52 @@ class CassetteTape {
     );
   }
 
+  /// The fields worth carrying across an app restart, so the mini-player is
+  /// still there when you come back. Lyrics are left out deliberately: they
+  /// are fetched fresh per track and would bloat the record for nothing.
+  Map<String, dynamic> toStoredJson() => {
+        'id': id,
+        'trackName': trackName,
+        'artistName': artistName,
+        'albumName': albumName,
+        'year': year,
+        'albumArtUrl': albumArtUrl,
+        'albumThumbUrl': albumThumbUrl,
+        'spotifyUri': spotifyUri,
+        'bodyColor': bodyColor.toARGB32(),
+        'labelColor': labelColor.toARGB32(),
+        'stripeColor': stripeColor.toARGB32(),
+        'durationMs': durationMs,
+        'contextIndex': contextIndex,
+      };
+
+  /// Rebuilds a tape stored by [toStoredJson]. Anything missing or of the
+  /// wrong shape falls back rather than throwing — a corrupt record should
+  /// cost the mini-player, not the launch.
+  factory CassetteTape.fromStoredJson(Map<String, dynamic> json) {
+    Color color(String key, int fallback) {
+      final v = json[key];
+      return Color(v is int ? v : fallback);
+    }
+
+    return CassetteTape(
+      id: json['id'] as String? ?? '',
+      trackName: json['trackName'] as String? ?? '',
+      artistName: json['artistName'] as String? ?? '',
+      albumName: json['albumName'] as String? ?? '',
+      year: json['year'] as String? ?? '',
+      albumArtUrl: json['albumArtUrl'] as String?,
+      albumThumbUrl: json['albumThumbUrl'] as String?,
+      spotifyUri: json['spotifyUri'] as String? ?? '',
+      bodyColor: color('bodyColor', 0xFF2A2A2A),
+      labelColor: color('labelColor', 0xFFDCD5C6),
+      stripeColor: color('stripeColor', 0xFFD6A033),
+      durationMs: json['durationMs'] as int? ?? 210000,
+      lyrics: const [],
+      contextIndex: json['contextIndex'] as int?,
+    );
+  }
+
   /// Built-in tape library so the app is fully explorable offline,
   /// mirroring the reference demo's five-tape lineup.
   static const List<CassetteTape> demoTapes = [

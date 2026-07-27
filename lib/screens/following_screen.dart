@@ -78,28 +78,46 @@ class _FollowingScreenState extends State<FollowingScreen> {
       return const SkeletonList(round: true);
     }
     final artists = _artists ?? const [];
-    if (artists.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 36),
-          child: Text("You aren't following any artists yet.",
-              textAlign: TextAlign.center, style: Explore.caption),
-        ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
-      itemCount: artists.length,
-      itemBuilder: (context, i) => ArtistListRow(
-        artist: artists[i],
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                ArtistScreen(artist: artists[i], spotifyService: svc),
-          ),
-        ),
-      ),
+    return RefreshIndicator(
+      onRefresh: _reload,
+      color: Explore.ink,
+      backgroundColor: Explore.card,
+      child: artists.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 36),
+                  child: Text(
+                    "You aren't following any artists yet — pull down to check "
+                    "again.",
+                    textAlign: TextAlign.center,
+                    style: Explore.caption,
+                  ),
+                ),
+              ],
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: artists.length,
+              itemBuilder: (context, i) => ArtistListRow(
+                artist: artists[i],
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ArtistScreen(artist: artists[i], spotifyService: svc),
+                  ),
+                ),
+              ),
+            ),
     );
+  }
+
+  Future<void> _reload() async {
+    setState(() => _loading = true);
+    await _load();
   }
 }

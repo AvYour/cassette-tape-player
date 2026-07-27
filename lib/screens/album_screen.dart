@@ -33,8 +33,9 @@ class _AlbumScreenState extends State<AlbumScreen> {
   List<CassetteTape>? _tapes;
   bool _loading = true;
 
-  // Null until /me/albums/contains answers.
-  bool? _saved;
+  /// Whether this album is in the library — read from the service, which knows
+  /// it from your saved-albums list rather than a per-album lookup.
+  bool? get _saved => svc.albumSavedOrNull(album.id);
 
   @override
   void initState() {
@@ -44,22 +45,25 @@ class _AlbumScreenState extends State<AlbumScreen> {
 
   Future<void> _load() async {
     final tapes = await svc.loadAlbumTracks(album.id);
-    final saved = await svc.isAlbumSaved(album.id);
     if (!mounted) return;
     setState(() {
       _tapes = tapes;
-      _saved = saved;
       _loading = false;
     });
+    await svc.ensureSavedAlbums();
+    if (tapes.isNotEmpty) {
+      await svc.ensureSavedLibrary();
+    }
+  }
+
+  Future<void> _reload() async {
+    setState(() => _loading = true);
+    await _load();
   }
 
   Future<void> _toggleSaved() async {
-    final next = !(_saved ?? false);
     HapticFeedback.lightImpact();
-    setState(() => _saved = next);
-    final result = await svc.setAlbumSaved(album.id, next);
-    if (!mounted) return;
-    setState(() => _saved = result);
+    await svc.setAlbumSaved(album.id, !(_saved ?? false));
   }
 
   void _play(List<CassetteTape> tapes, int index) {
@@ -83,14 +87,19 @@ class _AlbumScreenState extends State<AlbumScreen> {
       backgroundColor: Explore.bgTop,
       body: GlassBackdrop(
         child: SafeArea(
-          child: MiniPlayerOverlay(
-            service: svc,
-            child: Column(
-              children: [
-                _topBar(),
-                _header(),
-                Expanded(child: _body()),
-              ],
+          // Listening to the service so a heart toggled here — or in the
+          // player — redraws every row that shows it.
+          child: ListenableBuilder(
+            listenable: svc,
+            builder: (context, _) => MiniPlayerOverlay(
+              service: svc,
+              child: Column(
+                children: [
+                  _topBar(),
+                  _header(),
+                  Expanded(child: _body()),
+                ],
+              ),
             ),
           ),
         ),
@@ -175,18 +184,48 @@ class _AlbumScreenState extends State<AlbumScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 36),
-          child: Text("Couldn't load this album.",
-              textAlign: TextAlign.center, style: Explore.caption),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("Couldn't load this album.",
+                  textAlign: TextAlign.center, style: Explore.caption),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: _reload,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Explore.card,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: Explore.lift,
+                  ),
+                  child: Text('Try again', style: Explore.chip),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
-      itemCount: tapes.length,
-      itemBuilder: (context, i) => TrackRow(
-        tape: tapes[i],
-        nowPlaying: svc.nowPlaying?.id == tapes[i].id,
-        onTap: () => _play(tapes, i),
+    return RefreshIndicator(
+      onRefresh: _reload,
+      color: Explore.ink,
+      backgroundColor: Explore.card,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: tapes.length,
+        itemBuilder: (context, i) => TrackRow(
+          tape: tapes[i],
+          nowPlaying: svc.nowPlaying?.id == tapes[i].id,
+          saved: svc.savedOrNull(tapes[i].id),
+          onToggleSaved: svc.hasWebApi
+              ? () => svc.setSaved(
+                  tapes[i].id, !(svc.savedOrNull(tapes[i].id) ?? false))
+              : null,
+          onTap: () => _play(tapes, i),
+        ),
       ),
     );
   }

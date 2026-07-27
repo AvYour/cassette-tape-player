@@ -33,8 +33,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
   List<AlbumBrief>? _albums;
   bool _loading = true;
 
-  // Null until /me/following/contains answers.
-  bool? _following;
+  /// Whether you follow this artist — read from the service, which knows it
+  /// from your followed-artists list rather than a per-artist lookup.
+  bool? get _following => svc.followingOrNull(artist.id);
 
   // Wikipedia's opening paragraph; null when there is no usable article.
   String? _bio;
@@ -47,13 +48,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   Future<void> _load() async {
     final albums = await svc.loadArtistAlbums(artist.id);
-    final follows = await svc.isFollowingArtist(artist.id);
     if (!mounted) return;
     setState(() {
       _albums = albums;
-      _following = follows;
       _loading = false;
     });
+    await svc.ensureFollowing();
     // Spotify has no biography, so the About text comes from Wikipedia. It
     // arrives on its own schedule — the page is already usable without it.
     final bio = await WikiService.bio(artist.name);
@@ -61,12 +61,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Future<void> _toggleFollow() async {
-    final next = !(_following ?? false);
     HapticFeedback.selectionClick();
-    setState(() => _following = next);
-    final result = await svc.setFollowingArtist(artist.id, next);
-    if (!mounted) return;
-    setState(() => _following = result);
+    await svc.setFollowingArtist(artist.id, !(_following ?? false));
   }
 
   void _openAlbum(AlbumBrief album) => Navigator.push(

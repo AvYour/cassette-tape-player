@@ -59,6 +59,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     if (widget.autoConnect) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Bring back the last tape and the recent searches first: the
+        // mini-player should be waiting before the network answers.
+        svc.restoreSession();
         if (!svc.isConnected && !svc.isLoading) svc.connectToSpotify();
       });
     }

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/cassette_tape.dart';
 import '../models/playlist.dart';
 import '../services/spotify_service.dart';
 import '../utils/explore_theme.dart';
+import '../utils/track_query.dart';
 import '../widgets/glass.dart';
 import '../widgets/mini_player_bar.dart';
 import '../widgets/skeleton.dart';
@@ -34,14 +36,39 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   Playlist get playlist => _playlist;
   SpotifyService get svc => widget.spotifyService;
 
+  final TextEditingController _filter = TextEditingController();
+  TrackSort _sort = TrackSort.original;
+  bool _filtering = false;
+
   @override
   void initState() {
     super.initState();
     // Harmless if Explore already kicked this off — the service no-ops on a
     // playlist that is loading or already loaded.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      svc.loadPlaylistTracks(playlist);
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _filter.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    // Not gated on the tracks arriving: loadPlaylistTracks returns straight
+    // away when Explore already started the same fetch, so waiting on its
+    // result here would skip the library entirely and leave every row without
+    // a heart.
+    unawaited(svc.ensureSavedLibrary());
+    await svc.loadPlaylistTracks(playlist);
+  }
+
+  /// Pull-to-refresh and the retry button share this: forget what we have and
+  /// fetch it again.
+  Future<void> _refresh() async {
+    playlist.tapes = null;
+    playlist.loadError = null;
+    await _load();
   }
 
   void _setRange(TopRange range) {
@@ -84,6 +111,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     _topBar(),
                     _headerCard(tapes),
                     if (playlist.kind == PlaylistKind.top) _rangeChips(),
+                    if (_filtering) _filterBar(),
+                    if ((tapes?.length ?? 0) > 8) _sortChips(),
                     Expanded(child: _body(tapes)),
                   ],
                 ),
@@ -125,6 +154,75 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             tooltip: 'Back',
           ),
           const Spacer(),
+          if ((playlist.tapes?.length ?? 0) > 8)
+            IconButton(
+              tooltip: _filtering ? 'Close search' : 'Search in this list',
+              onPressed: () {
+                setState(() {
+                  _filtering = !_filtering;
+                  if (!_filtering) _filter.clear();
+                });
+              },
+              icon: Icon(_filtering ? Icons.close_rounded : Icons.search_rounded,
+                  color: Explore.ink),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// A search box for the list you are already in — Spotify has no endpoint
+  /// for "the songs in this playlist matching X", so it filters in memory.
+  Widget _filterBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: GlassPanel(
+        radius: 22,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: SizedBox(
+          height: 44,
+          child: Row(
+            children: [
+              const Icon(Icons.search_rounded, size: 18, color: Explore.muted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _filter,
+                  autofocus: true,
+                  onChanged: (_) => setState(() {}),
+                  cursorColor: Explore.ink,
+                  style: Explore.rowTitle.copyWith(fontSize: 14.5),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Find in this list',
+                    hintStyle: Explore.rowOwner.copyWith(fontSize: 14.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sortChips() {
+    return SizedBox(
+      height: 38,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+        children: [
+          for (final s in TrackSort.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _RangeChip(
+                label: s.label,
+                selected: _sort == s,
+                onTap: () => setState(() => _sort = s),
+              ),
+            ),
         ],
       ),
     );
@@ -171,25 +269,97 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       return const SkeletonList();
     }
     if (tapes == null || tapes.isEmpty) {
+      return _emptyOrError();
+    }
+
+    // Filter first, then order — so sorting applies to what you can see.
+    final shown =
+        TrackQuery.sort(TrackQuery.filter(tapes, _filter.text), _sort);
+    if (shown.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 36),
-          child: Text(
-            playlist.loadError ?? 'No songs in this playlist.',
-            textAlign: TextAlign.center,
-            style: Explore.caption,
-          ),
+          child: Text('Nothing here matches "${_filter.text.trim()}".',
+              textAlign: TextAlign.center, style: Explore.caption),
         ),
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
-      itemCount: tapes.length,
-      itemBuilder: (context, i) => TrackRow(
-        tape: tapes[i],
-        nowPlaying: svc.nowPlaying?.id == tapes[i].id,
-        onTap: () => _play(tapes, i),
+    // Spotify's paging is capped, so a very long playlist arrives short. Say
+    // so rather than let it look like the whole thing.
+    final truncated = _filter.text.trim().isEmpty &&
+        playlist.trackCount > tapes.length &&
+        tapes.length >= 300;
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      color: Explore.ink,
+      backgroundColor: Explore.card,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: shown.length + (truncated ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i == shown.length) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(10, 12, 10, 0),
+              child: Text(
+                'Showing the first ${tapes.length} of ${playlist.trackCount} '
+                'songs — Spotify caps how many we can page through.',
+                textAlign: TextAlign.center,
+                style: Explore.caption,
+              ),
+            );
+          }
+          final tape = shown[i];
+          return TrackRow(
+            tape: tape,
+            nowPlaying: svc.nowPlaying?.id == tape.id,
+            saved: svc.savedOrNull(tape.id),
+            onToggleSaved: svc.hasWebApi
+                ? () => svc.setSaved(tape.id, !(svc.savedOrNull(tape.id) ?? false))
+                : null,
+            // Play from the list as shown, so next/previous follow what you
+            // are looking at rather than the unsorted original.
+            onTap: () => _play(shown, i),
+          );
+        },
       ),
+    );
+  }
+
+  /// Nothing came back — say why, and offer the way out.
+  Widget _emptyOrError() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(height: MediaQuery.of(context).size.height * 0.18),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 36),
+          child: Column(
+            children: [
+              Text(
+                playlist.loadError ?? 'No songs in this playlist.',
+                textAlign: TextAlign.center,
+                style: Explore.caption,
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: _refresh,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Explore.card,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: Explore.lift,
+                  ),
+                  child: Text('Try again', style: Explore.chip),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

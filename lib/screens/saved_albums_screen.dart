@@ -78,28 +78,46 @@ class _SavedAlbumsScreenState extends State<SavedAlbumsScreen> {
       return const SkeletonList();
     }
     final albums = _albums ?? const [];
-    if (albums.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 36),
-          child: Text("You haven't saved any albums yet.",
-              textAlign: TextAlign.center, style: Explore.caption),
-        ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
-      itemCount: albums.length,
-      itemBuilder: (context, i) => AlbumListRow(
-        album: albums[i],
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                AlbumScreen(album: albums[i], spotifyService: svc),
-          ),
-        ),
-      ),
+    return RefreshIndicator(
+      onRefresh: _reload,
+      color: Explore.ink,
+      backgroundColor: Explore.card,
+      child: albums.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 36),
+                  child: Text(
+                    "You haven't saved any albums yet — pull down to check "
+                    "again.",
+                    textAlign: TextAlign.center,
+                    style: Explore.caption,
+                  ),
+                ),
+              ],
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, kMiniPlayerInset),
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: albums.length,
+              itemBuilder: (context, i) => AlbumListRow(
+                album: albums[i],
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        AlbumScreen(album: albums[i], spotifyService: svc),
+                  ),
+                ),
+              ),
+            ),
     );
+  }
+
+  Future<void> _reload() async {
+    setState(() => _loading = true);
+    await _load();
   }
 }

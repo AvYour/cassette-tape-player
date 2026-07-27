@@ -127,25 +127,23 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool get _canLike =>
       widget.spotifyService.isConnected && widget.spotifyService.hasWebApi;
 
-  /// Ask Spotify whether this tape is saved, keyed to the tape so a fast
-  /// next/prev can't land the answer on the wrong song.
+  /// Make sure the saved-tracks library is loaded, then read this tape out of
+  /// it. Nothing is asked per song — that endpoint is closed to this app.
   Future<void> _fetchSaved() async {
     if (!_canLike) return;
     final id = _tape.id;
-    setState(() => _saved = null);
-    final map = await widget.spotifyService.savedStatus([id]);
+    await widget.spotifyService.ensureSavedLibrary();
     if (!mounted || _tape.id != id) return;
-    setState(() => _saved = map[id] ?? false);
+    setState(() => _saved = widget.spotifyService.savedOrNull(id));
   }
 
-  /// Heart / un-heart the current tape, optimistically; setSaved reverts the
-  /// flag if Spotify rejects it.
+  /// Heart / un-heart the current tape. The service flips it optimistically
+  /// and reverts if Spotify refuses, so every heart on screen agrees.
   Future<void> _toggleSaved() async {
     final id = _tape.id;
-    final next = !(_saved ?? false);
     HapticFeedback.lightImpact();
-    setState(() => _saved = next);
-    final result = await widget.spotifyService.setSaved(id, next);
+    final result =
+        await widget.spotifyService.setSaved(id, !(_saved ?? false));
     if (!mounted || _tape.id != id) return;
     setState(() => _saved = result);
   }

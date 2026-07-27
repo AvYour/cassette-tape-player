@@ -72,6 +72,8 @@ class _SearchScreenState extends State<SearchScreen>
       _searching = false;
     });
     _enter.forward(from: 0);
+    // One lookup for the whole result set, so each row can show its heart.
+    svc.ensureSavedLibrary();
   }
 
   void _runFrom(String query) {
@@ -230,6 +232,11 @@ class _SearchScreenState extends State<SearchScreen>
                 TrackRow(
                   tape: _results.tracks[i],
                   nowPlaying: svc.nowPlaying?.id == _results.tracks[i].id,
+                  saved: svc.savedOrNull(_results.tracks[i].id),
+                  onToggleSaved: svc.hasWebApi
+                      ? () => svc.setSaved(_results.tracks[i].id,
+                          !(svc.savedOrNull(_results.tracks[i].id) ?? false))
+                      : null,
                   onTap: () => _openTrack(i),
                 ),
             ],

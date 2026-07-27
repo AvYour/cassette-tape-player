@@ -12,11 +12,20 @@ class TrackRow extends StatelessWidget {
 
   final VoidCallback onTap;
 
+  /// Whether the track is in the user's library — null while unknown, which
+  /// draws nothing rather than an empty heart that might be wrong.
+  final bool? saved;
+
+  /// Set to make the heart a control; without it the heart is only a mark.
+  final VoidCallback? onToggleSaved;
+
   const TrackRow({
     super.key,
     required this.tape,
     required this.onTap,
     this.nowPlaying = false,
+    this.saved,
+    this.onToggleSaved,
   });
 
   /// `4:19`. Minutes unpadded, seconds padded — how a track length is written
@@ -82,7 +91,28 @@ class TrackRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                // Only once the answer is in. An outline heart while the
+                // status is still unknown would be claiming "not saved".
+                if (saved != null) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: onToggleSaved,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        saved == true
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 18,
+                        color: saved == true
+                            ? const Color(0xFFE0526B)
+                            : Explore.muted,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 8),
                 Text(formatDuration(tape.durationMs), style: Explore.caption),
               ],
             ),

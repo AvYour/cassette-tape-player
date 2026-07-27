@@ -11,6 +11,7 @@ import '../models/track_info.dart';
 import '../utils/debouncer.dart';
 import '../utils/lru_cache.dart';
 import '../utils/playlist_paging.dart';
+import 'session_store.dart';
 import 'spotify_auth.dart';
 
 class SpotifyService extends ChangeNotifier {
@@ -59,12 +60,33 @@ class SpotifyService extends ChangeNotifier {
     _nowContextUri = contextUri;
     _nowPlaying = (index >= 0 && index < queue.length) ? queue[index] : null;
     notifyListeners();
+    SessionStore.saveNowPlaying(queue, index, contextUri);
   }
 
   /// Clears the mini-player (used when the tape is ejected/stopped for good).
   void clearNowPlaying() {
     _nowPlaying = null;
     _nowQueue = const [];
+    notifyListeners();
+    SessionStore.clearNowPlaying();
+  }
+
+  /// Brings back what the last session was playing, so the mini-player is
+  /// waiting where you left it. Nothing is resumed — the tape is only loaded,
+  /// exactly as it would be after backing out of the player.
+  Future<void> restoreSession() async {
+    _recentSearches
+      ..clear()
+      ..addAll(await SessionStore.loadSearches());
+    final saved = await SessionStore.loadNowPlaying();
+    if (saved != null && saved.queue.isNotEmpty) {
+      _nowQueue = saved.queue;
+      _nowIndex = saved.index;
+      _nowContextUri = saved.contextUri;
+      _nowPlaying = saved.index >= 0 && saved.index < saved.queue.length
+          ? saved.queue[saved.index]
+          : null;
+    }
     notifyListeners();
   }
 
@@ -450,11 +472,13 @@ class SpotifyService extends ChangeNotifier {
     _recentSearches.removeWhere((s) => s.toLowerCase() == q.toLowerCase());
     _recentSearches.insert(0, q);
     if (_recentSearches.length > 8) _recentSearches.removeLast();
+    SessionStore.saveSearches(_recentSearches);
   }
 
   void clearRecentSearches() {
     _recentSearches.clear();
     notifyListeners();
+    SessionStore.saveSearches(const []);
   }
 
   // Your top artists, cached for the session — feeds the empty search screen
@@ -555,30 +579,79 @@ class SpotifyService extends ChangeNotifier {
   // works (it is what Liked Songs reads today); swap the paths here once the
   // replacement's shape is pinned. Requires scope `user-library-modify`.
 
-  /// Which of [ids] are saved, as a map id→saved. Chunked to the 50-id cap.
-  Future<Map<String, bool>> savedStatus(List<String> ids) async {
-    final result = <String, bool>{};
-    for (var i = 0; i < ids.length; i += 50) {
-      final chunk = ids.sublist(i, i + 50 > ids.length ? ids.length : i + 50);
-      try {
-        final res = await _authedGet(Uri.parse(
-            'https://api.spotify.com/v1/me/tracks/contains?ids=${chunk.join(',')}'));
-        if (res.statusCode != 200) continue;
-        final flags = (json.decode(res.body) as List?) ?? [];
-        for (var j = 0; j < chunk.length && j < flags.length; j++) {
-          result[chunk[j]] = flags[j] == true;
-        }
-      } catch (_) {}
+  // Saved-or-not per track id, shared by every list that draws a heart, so a
+  // toggle in the player is reflected in the playlist behind it.
+  //
+  // This is filled from your saved-tracks list, not by asking about each song.
+  // `/me/tracks/contains` — the endpoint built for exactly that question —
+  // answers 403 Forbidden for this app, while `/me/tracks` itself returns the
+  // whole library happily. So the library is fetched once and becomes the
+  // answer to every "is this saved?".
+  final Map<String, bool> _saved = {};
+  bool _savedLibraryLoaded = false;
+  Future<void>? _savedLibraryInFlight;
+
+  /// Whether [trackId] is saved, or null while that is still unknown — which
+  /// is what the UI needs to avoid drawing an empty heart it can't stand
+  /// behind.
+  bool? savedOrNull(String trackId) {
+    if (!_savedLibraryLoaded) return _saved[trackId];
+    return _saved[trackId] ?? false;
+  }
+
+  /// Fetches your saved tracks once and remembers their ids. Concurrent
+  /// callers share the one request.
+  Future<void> ensureSavedLibrary() {
+    if (_savedLibraryLoaded) return Future.value();
+    return _savedLibraryInFlight ??= _loadSavedLibrary();
+  }
+
+  Future<void> _loadSavedLibrary() async {
+    // Only the Web API token matters here. Gating on isConnected as well was
+    // wrong: that is the App Remote playback link, and the library reads fine
+    // without it.
+    if (!hasWebApi) {
+      _savedLibraryInFlight = null;
+      return;
     }
-    return result;
+    try {
+      const pageSize = 50;
+      const maxTracks = 500;
+      for (var offset = 0; offset < maxTracks; offset += pageSize) {
+        final res = await _authedGet(Uri.parse(
+            'https://api.spotify.com/v1/me/tracks?limit=$pageSize&offset=$offset'));
+        if (res.statusCode != 200) break;
+        final body = json.decode(res.body) as Map<String, dynamic>;
+        final items = (body['items'] as List?) ?? [];
+        for (final item in items) {
+          if (item is! Map) continue;
+          final track = item['track'] ?? item['item'];
+          if (track is Map && track['id'] is String) {
+            _saved[track['id'] as String] = true;
+          }
+        }
+        if (items.length < pageSize || body['next'] == null) break;
+      }
+      _savedLibraryLoaded = true;
+      notifyListeners();
+    } catch (_) {
+      // Leave it unloaded: hearts stay absent rather than wrongly empty.
+    }
+    _savedLibraryInFlight = null;
   }
 
   /// Saves or unsaves one track. Returns the new saved state (unchanged on
   /// failure so the UI can revert an optimistic toggle).
   Future<bool> setSaved(String trackId, bool save) async {
+    // Optimistic: every heart on screen flips at once, and flips back
+    // together if Spotify refuses.
+    _saved[trackId] = save;
+    notifyListeners();
     final ok = await _writeToggle(
         Uri.parse('https://api.spotify.com/v1/me/tracks?ids=$trackId'), save);
-    return ok ? save : !save;
+    _saved[trackId] = ok ? save : !save;
+    notifyListeners();
+    return _saved[trackId]!;
   }
 
   /// Shared PUT (add) / DELETE (remove) with one 401 re-auth retry.
@@ -599,27 +672,45 @@ class SpotifyService extends ChangeNotifier {
     }
   }
 
-  /// True iff the single id at a `.../contains?ids=` endpoint comes back saved.
-  Future<bool> _containsOne(Uri uri) async {
-    try {
-      final res = await _authedGet(uri);
-      if (res.statusCode != 200) return false;
-      final flags = json.decode(res.body) as List?;
-      return flags != null && flags.isNotEmpty && flags.first == true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   // --- Saved albums (user-library-modify) ----------------------------------
+  //
+  // As with tracks, the `/contains` endpoint is closed to this app, so the
+  // saved-albums list itself is the source of truth.
+  final Set<String> _savedAlbums = {};
+  bool _savedAlbumsLoaded = false;
 
-  Future<bool> isAlbumSaved(String albumId) => _containsOne(Uri.parse(
-      'https://api.spotify.com/v1/me/albums/contains?ids=$albumId'));
+  /// Whether [albumId] is in your library, or null while unknown.
+  bool? albumSavedOrNull(String albumId) =>
+      _savedAlbumsLoaded ? _savedAlbums.contains(albumId) : null;
+
+  Future<void> ensureSavedAlbums() async {
+    if (_savedAlbumsLoaded) return;
+    final albums = await savedAlbums();
+    _savedAlbums
+      ..clear()
+      ..addAll(albums.map((a) => a.id));
+    _savedAlbumsLoaded = true;
+    notifyListeners();
+  }
 
   /// Save/unsave an album; returns the new state, reverted on failure.
   Future<bool> setAlbumSaved(String albumId, bool save) async {
+    if (save) {
+      _savedAlbums.add(albumId);
+    } else {
+      _savedAlbums.remove(albumId);
+    }
+    notifyListeners();
     final ok = await _writeToggle(
         Uri.parse('https://api.spotify.com/v1/me/albums?ids=$albumId'), save);
+    if (!ok) {
+      if (save) {
+        _savedAlbums.remove(albumId);
+      } else {
+        _savedAlbums.add(albumId);
+      }
+      notifyListeners();
+    }
     return ok ? save : !save;
   }
 
@@ -643,15 +734,45 @@ class SpotifyService extends ChangeNotifier {
 
   // --- Followed artists (user-follow-read / user-follow-modify) -------------
 
-  Future<bool> isFollowingArtist(String artistId) => _containsOne(Uri.parse(
-      'https://api.spotify.com/v1/me/following/contains?type=artist&ids=$artistId'));
+  // Same shape again: the followed-artists list stands in for the `/contains`
+  // endpoint this app is not allowed to call.
+  final Set<String> _following = {};
+  bool _followingLoaded = false;
+
+  /// Whether you follow [artistId], or null while unknown.
+  bool? followingOrNull(String artistId) =>
+      _followingLoaded ? _following.contains(artistId) : null;
+
+  Future<void> ensureFollowing() async {
+    if (_followingLoaded) return;
+    final artists = await following();
+    _following
+      ..clear()
+      ..addAll(artists.map((a) => a.id));
+    _followingLoaded = true;
+    notifyListeners();
+  }
 
   /// Follow/unfollow an artist; returns the new state, reverted on failure.
   Future<bool> setFollowingArtist(String artistId, bool follow) async {
+    if (follow) {
+      _following.add(artistId);
+    } else {
+      _following.remove(artistId);
+    }
+    notifyListeners();
     final ok = await _writeToggle(
         Uri.parse(
             'https://api.spotify.com/v1/me/following?type=artist&ids=$artistId'),
         follow);
+    if (!ok) {
+      if (follow) {
+        _following.remove(artistId);
+      } else {
+        _following.add(artistId);
+      }
+      notifyListeners();
+    }
     return ok ? follow : !follow;
   }
 
