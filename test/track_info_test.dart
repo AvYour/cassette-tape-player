@@ -12,20 +12,16 @@ Map<String, dynamic> _track() => {
         {'id': 'a2', 'name': 'Ruel'},
       ],
       'album': {
+        'id': 'alb9',
         'name': 'this is what ___ feels like',
         'release_date': '2022-09-23',
       },
     };
 
-Map<String, dynamic> _artist() => {
-      'genres': ['pop', 'viral pop'],
-      'followers': {'total': 1234567},
-    };
-
 void main() {
   group('TrackInfo.fromJson', () {
     test('reads the full Spotify track shape', () {
-      final info = TrackInfo.fromJson(_track(), artistJson: _artist());
+      final info = TrackInfo.fromJson(_track());
       expect(info.title, 'Golden Hour');
       expect(info.artistsLine, 'JVKE, Ruel');
       expect(info.albumName, 'this is what ___ feels like');
@@ -34,8 +30,25 @@ void main() {
       expect(info.trackNumber, 3);
       expect(info.explicit, isTrue);
       expect(info.popularity, 87);
-      expect(info.genres, ['pop', 'viral pop']);
-      expect(info.artistFollowers, 1234567);
+    });
+
+    test('keeps the ids the liner notes need to walk into', () {
+      final info = TrackInfo.fromJson(_track());
+      // The primary artist, so tapping the name opens the right page.
+      expect(info.artistId, 'a1');
+      expect(info.albumId, 'alb9');
+    });
+
+    test('a track with no artist or album ids offers nothing to tap', () {
+      final info = TrackInfo.fromJson({
+        'name': 'X',
+        'artists': [
+          {'name': 'No Id'}
+        ],
+        'album': {'name': 'No Id Album'},
+      });
+      expect(info.artistId, isNull);
+      expect(info.albumId, isNull);
     });
 
     test('survives a missing artist payload and sparse fields', () {
@@ -45,8 +58,8 @@ void main() {
       expect(info.releaseYear, '');
       expect(info.explicit, isFalse);
       expect(info.popularity, 0);
-      expect(info.genres, isEmpty);
-      expect(info.artistFollowers, isNull);
+      expect(info.artistId, isNull);
+      expect(info.albumId, isNull);
     });
   });
 

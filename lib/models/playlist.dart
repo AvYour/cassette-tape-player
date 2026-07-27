@@ -19,9 +19,22 @@ enum PlaylistKind {
   /// Your most-played tracks — `/me/top/tracks`.
   top,
 
+  /// A portal to your saved albums — opens a list, not a track shelf.
+  savedAlbums,
+
+  /// A portal to the artists you follow — opens a list, not a track shelf.
+  following,
+
   /// The built-in starter mixtape; preloaded, never fetched.
   demo,
 }
+
+/// Portal rows carry no tracks: tapping opens a browse screen instead of a
+/// track list, so they show no Play button.
+const Set<PlaylistKind> kPortalKinds = {
+  PlaylistKind.savedAlbums,
+  PlaylistKind.following,
+};
 
 /// The window `/me/top/tracks` is computed over.
 enum TopRange {
@@ -107,6 +120,28 @@ class Playlist {
         trackCount: 0,
         accent: kTapePalette[1].stripe,
         kind: PlaylistKind.top,
+      );
+
+  /// Portal to your saved albums.
+  factory Playlist.savedAlbums() => Playlist(
+        id: 'saved_albums',
+        name: 'Saved Albums',
+        owner: 'You',
+        ownerId: '',
+        trackCount: 0,
+        accent: kTapePalette[2].stripe,
+        kind: PlaylistKind.savedAlbums,
+      );
+
+  /// Portal to the artists you follow.
+  factory Playlist.following() => Playlist(
+        id: 'following',
+        name: 'Following',
+        owner: 'You',
+        ownerId: '',
+        trackCount: 0,
+        accent: kTapePalette[0].stripe,
+        kind: PlaylistKind.following,
       );
 
   /// The built-in starter mixtape: a drawer that works with no Spotify account

@@ -54,6 +54,11 @@ class ArtistBrief {
       );
 }
 
+// An ArtistDetail (genres + follower count from `GET /artists/{id}`) used to
+// live here. Spotify deprecated `genres`, `followers` and `popularity` on the
+// artist object and returns them empty, so it only ever carried blanks. The
+// artist page shows a Wikipedia paragraph instead.
+
 /// One search's worth of results across the three types the app browses.
 class SearchResults {
   final List<CassetteTape> tracks;

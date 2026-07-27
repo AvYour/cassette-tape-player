@@ -223,6 +223,8 @@ class SpotifyService extends ChangeNotifier {
         Playlist.liked(total: await _fetchLikedTotal()),
         Playlist.topTracks(_topRange),
         Playlist.recentlyPlayed(),
+        Playlist.savedAlbums(),
+        Playlist.following(),
         ...owned,
       ];
       notifyListeners();
@@ -279,6 +281,9 @@ class SpotifyService extends ChangeNotifier {
           await _loadTopTracks(playlist);
         case PlaylistKind.demo:
           break; // preloaded
+        case PlaylistKind.savedAlbums:
+        case PlaylistKind.following:
+          break; // portals — opened as their own browse screens, no tracks
         case PlaylistKind.spotify:
           await _loadPlaylistItems(playlist);
       }
@@ -494,6 +499,13 @@ class SpotifyService extends ChangeNotifier {
     }
   }
 
+  // An artist's top tracks used to load here, from `/artists/{id}/top-tracks`.
+  // That endpoint answers 403 Forbidden for this app no matter what `market`
+  // is passed (from_token, a real ISO code, or none), while `/artists/{id}`
+  // and `/albums/{id}` both answer 200 — so it is the endpoint that is closed
+  // to us, not the request that is malformed. Rather than ship a section that
+  // fires a failing call on every artist page and never renders, it is gone.
+
   /// The tracks of an album — `GET /albums/{id}` — as cassettes, each borrowing
   /// the album's cover (the album's own track list ships none).
   Future<List<CassetteTape>> loadAlbumTracks(String albumId) async {
@@ -564,22 +576,101 @@ class SpotifyService extends ChangeNotifier {
   /// Saves or unsaves one track. Returns the new saved state (unchanged on
   /// failure so the UI can revert an optimistic toggle).
   Future<bool> setSaved(String trackId, bool save) async {
-    final uri =
-        Uri.parse('https://api.spotify.com/v1/me/tracks?ids=$trackId');
+    final ok = await _writeToggle(
+        Uri.parse('https://api.spotify.com/v1/me/tracks?ids=$trackId'), save);
+    return ok ? save : !save;
+  }
+
+  /// Shared PUT (add) / DELETE (remove) with one 401 re-auth retry.
+  Future<bool> _writeToggle(Uri uri, bool add) async {
     try {
-      final res = save
+      var res = add
           ? await http.put(uri, headers: _authHeader)
           : await http.delete(uri, headers: _authHeader);
-      var code = res.statusCode;
-      if (code == 401 && await SpotifyAuth.authorizeInteractive()) {
-        final retry = save
+      if (res.statusCode == 401 && await SpotifyAuth.authorizeInteractive()) {
+        res = add
             ? await http.put(uri, headers: _authHeader)
             : await http.delete(uri, headers: _authHeader);
-        code = retry.statusCode;
       }
-      return (code == 200 || code == 201 || code == 204) ? save : !save;
+      final c = res.statusCode;
+      return c == 200 || c == 201 || c == 204;
     } catch (_) {
-      return !save;
+      return false;
+    }
+  }
+
+  /// True iff the single id at a `.../contains?ids=` endpoint comes back saved.
+  Future<bool> _containsOne(Uri uri) async {
+    try {
+      final res = await _authedGet(uri);
+      if (res.statusCode != 200) return false;
+      final flags = json.decode(res.body) as List?;
+      return flags != null && flags.isNotEmpty && flags.first == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // --- Saved albums (user-library-modify) ----------------------------------
+
+  Future<bool> isAlbumSaved(String albumId) => _containsOne(Uri.parse(
+      'https://api.spotify.com/v1/me/albums/contains?ids=$albumId'));
+
+  /// Save/unsave an album; returns the new state, reverted on failure.
+  Future<bool> setAlbumSaved(String albumId, bool save) async {
+    final ok = await _writeToggle(
+        Uri.parse('https://api.spotify.com/v1/me/albums?ids=$albumId'), save);
+    return ok ? save : !save;
+  }
+
+  /// Your saved albums — `GET /me/albums`. Each item nests the album under
+  /// `album`.
+  Future<List<AlbumBrief>> savedAlbums() async {
+    try {
+      final res = await _authedGet(
+          Uri.parse('https://api.spotify.com/v1/me/albums?limit=50'));
+      if (res.statusCode != 200) return const [];
+      final items = (json.decode(res.body)['items'] as List?) ?? [];
+      return [
+        for (final it in items)
+          if (it is Map<String, dynamic> && it['album'] is Map<String, dynamic>)
+            AlbumBrief.fromJson(it['album'] as Map<String, dynamic>),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  // --- Followed artists (user-follow-read / user-follow-modify) -------------
+
+  Future<bool> isFollowingArtist(String artistId) => _containsOne(Uri.parse(
+      'https://api.spotify.com/v1/me/following/contains?type=artist&ids=$artistId'));
+
+  /// Follow/unfollow an artist; returns the new state, reverted on failure.
+  Future<bool> setFollowingArtist(String artistId, bool follow) async {
+    final ok = await _writeToggle(
+        Uri.parse(
+            'https://api.spotify.com/v1/me/following?type=artist&ids=$artistId'),
+        follow);
+    return ok ? follow : !follow;
+  }
+
+  /// Artists you follow — `GET /me/following?type=artist`. The list is nested
+  /// under `artists.items`.
+  Future<List<ArtistBrief>> following() async {
+    try {
+      final res = await _authedGet(Uri.parse(
+          'https://api.spotify.com/v1/me/following?type=artist&limit=50'));
+      if (res.statusCode != 200) return const [];
+      final items =
+          (json.decode(res.body)['artists']?['items'] as List?) ?? [];
+      return [
+        for (final a in items)
+          if (a is Map<String, dynamic> && a['id'] != null)
+            ArtistBrief.fromJson(a),
+      ];
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -607,27 +698,11 @@ class SpotifyService extends ChangeNotifier {
         _infoCache.put(tape.id, null);
         return null;
       }
-      final trackJson = json.decode(res.body) as Map<String, dynamic>;
-      // Enrich with the primary artist's profile (genres, followers).
-      Map<String, dynamic>? artistJson;
-      final artists = trackJson['artists'] as List?;
-      final artistId =
-          artists != null && artists.isNotEmpty && artists.first is Map
-              ? (artists.first as Map)['id']
-              : null;
-      if (artistId is String && artistId.isNotEmpty) {
-        final ares = await _authedGet(
-            Uri.parse('https://api.spotify.com/v1/artists/$artistId'));
-        if (ares.statusCode == 200) {
-          artistJson = json.decode(ares.body) as Map<String, dynamic>;
-        }
-      }
-      final info = TrackInfo.fromJson(trackJson, artistJson: artistJson);
-      if (kDebugMode && info.popularity == 0) {
-        // Evidence for the next debugging round if Spotify really sends none.
-        debugPrint('TrackInfo debug: popularity=0 for "${info.title}"; '
-            'track keys: ${trackJson.keys.toList()}');
-      }
+      // A second call used to follow, fetching the primary artist for genres
+      // and followers. Both are deprecated and come back empty, so the notes
+      // now cost one request instead of two.
+      final info =
+          TrackInfo.fromJson(json.decode(res.body) as Map<String, dynamic>);
       _infoCache.put(tape.id, info);
       return info;
     } catch (_) {

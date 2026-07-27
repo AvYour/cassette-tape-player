@@ -1,5 +1,10 @@
-/// Full track details from the Spotify Web API (plus the primary artist's
-/// profile), shown as the cassette's liner notes.
+/// Full track details from the Spotify Web API, shown as the cassette's liner
+/// notes. Carries the primary artist's and the album's ids so the notes can be
+/// walked into — tap the artist or the album to open their page.
+///
+/// The primary artist's genres and follower count used to live here too, which
+/// cost a second request per track. Spotify deprecated both fields (they come
+/// back empty), so the request is gone with them.
 class TrackInfo {
   final String title;
   final List<String> artists;
@@ -8,9 +13,9 @@ class TrackInfo {
   final int durationMs;
   final int trackNumber;
   final bool explicit;
-  final int popularity; // 0..100
-  final List<String> genres; // primary artist's genres
-  final int? artistFollowers;
+  final int popularity; // 0..100 — deprecated by Spotify, kept for parity
+  final String? artistId;
+  final String? albumId;
 
   const TrackInfo({
     required this.title,
@@ -21,21 +26,19 @@ class TrackInfo {
     required this.trackNumber,
     required this.explicit,
     required this.popularity,
-    required this.genres,
-    required this.artistFollowers,
+    this.artistId,
+    this.albumId,
   });
 
   String get artistsLine => artists.join(', ');
 
-  factory TrackInfo.fromJson(Map<String, dynamic> track,
-      {Map<String, dynamic>? artistJson}) {
+  factory TrackInfo.fromJson(Map<String, dynamic> track) {
     final album = track['album'] as Map<String, dynamic>? ?? {};
-    final artists = ((track['artists'] as List?) ?? [])
-        .whereType<Map>()
-        .map((a) => a['name'])
-        .whereType<String>()
-        .toList();
-    final followers = artistJson?['followers'];
+    final artistMaps = ((track['artists'] as List?) ?? []).whereType<Map>();
+    final artists =
+        artistMaps.map((a) => a['name']).whereType<String>().toList();
+    final firstId = artistMaps.isEmpty ? null : artistMaps.first['id'];
+    final albumId = album['id'];
     return TrackInfo(
       title: track['name'] as String? ?? '',
       artists: artists,
@@ -45,9 +48,8 @@ class TrackInfo {
       trackNumber: (track['track_number'] as int?) ?? 0,
       explicit: (track['explicit'] as bool?) ?? false,
       popularity: _popularityOf(track),
-      genres:
-          ((artistJson?['genres'] as List?) ?? []).whereType<String>().toList(),
-      artistFollowers: followers is Map ? followers['total'] as int? : null,
+      artistId: firstId is String && firstId.isNotEmpty ? firstId : null,
+      albumId: albumId is String && albumId.isNotEmpty ? albumId : null,
     );
   }
 

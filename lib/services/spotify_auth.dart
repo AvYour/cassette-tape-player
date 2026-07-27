@@ -16,6 +16,7 @@ class SpotifyAuth {
       'user-read-currently-playing playlist-read-private '
       'playlist-read-collaborative user-library-read '
       'user-library-modify user-top-read '
+      'user-follow-read user-follow-modify '
       'user-read-recently-played';
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage();

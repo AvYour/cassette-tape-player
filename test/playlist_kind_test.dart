@@ -42,6 +42,19 @@ void main() {
       expect(Playlist.topTracks(TopRange.longTerm).id, 'top_long_term');
     });
 
+    test('saved-albums and following are portal rows with no context', () {
+      final albums = Playlist.savedAlbums();
+      final follow = Playlist.following();
+      expect(albums.kind, PlaylistKind.savedAlbums);
+      expect(follow.kind, PlaylistKind.following);
+      expect(albums.contextUri, isNull);
+      expect(follow.contextUri, isNull);
+      // Both are portals, so the wheel shows them without a Play button.
+      expect(kPortalKinds.contains(albums.kind), isTrue);
+      expect(kPortalKinds.contains(follow.kind), isTrue);
+      expect(kPortalKinds.contains(PlaylistKind.liked), isFalse);
+    });
+
     test('the demo mixtape no longer claims a bogus playlist context', () {
       final demo = Playlist.demo();
       expect(demo.kind, PlaylistKind.demo);
